@@ -16,20 +16,20 @@
     }
     *{box-sizing:border-box}
     body{margin:0;font-family: ui-sans-serif, system-ui, -apple-system, "Noto Sans TC", "PingFang TC", Arial, sans-serif; background:var(--bg); color:var(--ink);}    
-    header{padding:14px 16px; border-bottom:1px solid #f0e3ea; background:#fff; position:sticky; top:0; z-index:2}
-    .head{display:flex; flex-direction:column; gap:6px}
-    .title{font-weight:700; letter-spacing:.2px; color: var(--subgrid); font-size:20px}
+    header{padding:18px 16px; border-bottom:1px solid #f0e3ea; background:#fff; position:sticky; top:0; z-index:2}
+    .head{display:flex; flex-direction:column; gap:8px; align-items:center; text-align:center}
+    .title{font-weight:700; letter-spacing:.2px; color: var(--subgrid); font-size:22px}
     .subtitle{color:var(--muted); font-weight:500; font-size:13px}
-    .actions{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+    .actions{display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:center}
     .pill{font-size:12px; padding:6px 8px; border-radius:999px; border:1px solid #e8d3df; color:#6b6b77; background:#fff}
     button{border:1.5px solid #e8d3df; background:#fff; padding:9px 12px; border-radius:12px; cursor:pointer; font-weight:600}
     button:hover{background:#fff6fb}
     .primary{background:var(--brand); color:#fff; border-color:var(--brand)}
 
-    main{max-width:720px; margin:0 auto; padding:18px}
+    main{max-width:720px; margin:0 auto; padding:18px; text-align:center}
 
     /* Board wrapper & base */
-    .board-wrap{background:#fff;border:2px solid #f0e3ea; border-radius:18px; padding:16px; box-shadow:var(--shadow)}
+    .board-wrap{background:#fff;border:2px solid #f0e3ea; border-radius:18px; padding:16px; box-shadow:var(--shadow); display:inline-block}
     .board{border:2.5px solid var(--subgrid); border-radius:12px; overflow:hidden}
     .cell{border:1.5px solid var(--grid); background:var(--cell); display:flex; align-items:center; justify-content:center; position:relative; user-select:none}
     .cell.alt{background:var(--cell-alt)}
@@ -47,7 +47,8 @@
     .pick img{max-width:92%; max-height:92%}
     .hidden{display:none}
 
-    .hint{margin:10px 4px; color:var(--muted); font-size:12px}
+    .hint{margin:12px 4px 0; color:var(--muted); font-size:12px}
+    .hint.center{display:block; text-align:center}
 
     /* Error overlay */
     #err{position:fixed; left:0; right:0; top:0; background:#ffeaea; color:#b00020; padding:10px 14px; border-bottom:2px solid #ffb3b3; font-size:12px; display:none; z-index:99}
@@ -63,6 +64,7 @@
         <span id="status" class="pill">就緒</span>
         <button id="btnCheck" class="primary">檢查</button>
         <button id="btnReset">重置到題目</button>
+        <button id="btnNext">下一題</button>
       </div>
     </div>
   </header>
@@ -73,7 +75,7 @@
       <div id="board" class="board" aria-label="9x9 board"
            style="display:grid;grid-template-columns:repeat(9,minmax(34px,1fr));gap:0"></div>
     </section>
-    <div class="hint">提示：鍵盤 1–9 也可填入、Backspace 清除</div>
+    <div class="hint center">提示：鍵盤 1–9 也可填入、Backspace 清除</div>
   </main>
 
   <!-- floating 3x3 image picker -->
@@ -118,25 +120,50 @@
     });
   }
 
-  // ===== Puzzle =====
-  var SOLVED = [
+  // ===== Base puzzle (題1) =====
+  var SOLVED1 = [
     5,3,4,6,7,8,9,1,2, 6,7,2,1,9,5,3,4,8, 1,9,8,3,4,2,5,6,7,
     8,5,9,7,6,1,4,2,3, 4,2,6,8,5,3,7,9,1, 7,1,3,9,2,4,8,5,6,
     9,6,1,5,3,7,2,8,4, 2,8,7,4,1,9,6,3,5, 3,4,5,2,8,6,1,7,9
   ];
-  var PUZZLE = [
+  var PUZZLE1 = [
     5,3,0,0,7,0,0,0,0, 6,0,0,1,9,5,0,0,0, 0,9,8,0,0,0,0,6,0,
     8,0,0,0,6,0,0,0,3, 4,0,0,8,0,3,0,0,1, 7,0,0,0,2,0,0,0,6,
     0,6,0,0,0,0,2,8,0, 0,0,0,4,1,9,0,0,5, 0,0,0,0,8,0,0,7,9
   ];
+
+  // ===== Puzzle 2：用數字 +1 的一致轉換，確保是有效解 =====
+  function plus1(n){ return (n % 9) + 1; }
+  var SOLVED2 = SOLVED1.map(plus1);
+  var PUZZLE2 = PUZZLE1.map(function(v, i){ return v ? SOLVED2[i] : 0; });
+
+  var PUZZLES = [
+    {puzzle: PUZZLE1, solved: SOLVED1},
+    {puzzle: PUZZLE2, solved: SOLVED2}
+  ];
+  var puzzleIndex = 0;
 
   // ===== State =====
   var boardEl = document.getElementById('board');
   var picker = document.getElementById('picker');
   var statusEl = document.getElementById('status');
   var size = 9;
+  var PUZZLE = PUZZLES[puzzleIndex].puzzle.slice();
+  var SOLVED  = PUZZLES[puzzleIndex].solved.slice();
   var state = {cells: PUZZLE.slice(), given: new Set(), selectedIndex: -1, highlight: null};
   for (var gi=0; gi<PUZZLE.length; gi++){ if (PUZZLE[gi]>0) state.given.add(gi); }
+
+  function usePuzzle(idx){
+    puzzleIndex = idx % PUZZLES.length;
+    PUZZLE = PUZZLES[puzzleIndex].puzzle.slice();
+    SOLVED = PUZZLES[puzzleIndex].solved.slice();
+    state.cells = PUZZLE.slice();
+    state.given = new Set();
+    for (var i=0;i<PUZZLE.length;i++){ if (PUZZLE[i]>0) state.given.add(i); }
+    state.selectedIndex = -1;
+    state.highlight = null;
+    render();
+  }
 
   // ===== Square sizing (no aspect-ratio) =====
   function squareUp(){
@@ -261,6 +288,11 @@
   // ===== Controls =====
   document.getElementById('btnCheck').onclick = validate;
   document.getElementById('btnReset').onclick = function(){ setHighlight(null); state.cells = PUZZLE.slice(); render(); };
+  document.getElementById('btnNext').onclick = function(){
+    hidePicker();
+    setHighlight(null);
+    usePuzzle((puzzleIndex + 1) % PUZZLES.length);
+  };
 
   // ===== Init =====
   try {
