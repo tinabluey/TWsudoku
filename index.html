@@ -5,8 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>TWZOO Sudoku</title>
   <meta name="theme-color" content="#ffffff" />
-  <!-- 將在 JS 中把 favicon 設為 IMAGES[0]（預設為數字1的圓形；若有 images/1.png 會自動用你的貼圖） -->
-  <!-- favicon：若根目錄有 Favicon.png 或 favicon.png 會優先使用；否則以 JS 動態設定 -->
+  <!-- favicon：若根目錄有 Favicon.png 或 favicon.png 會優先使用；否則以 JS 動態設定成第一張圖像 -->
   <link rel="icon" href="favicon.png" type="image/png" />
   <link rel="apple-touch-icon" href="favicon.png" />
   <style>
@@ -37,7 +36,6 @@
     .cell.ok{background:var(--ok)}
     .cell.hl{box-shadow:0 0 0 3px var(--accent) inset; position:relative}
     .cell img{max-width:80%; max-height:80%; pointer-events:none}
-    .cell .idx{position:absolute; left:6px; top:6px; font-size:10px; color:#caa}
     .cell.thick-right{border-right:2.5px solid var(--subgrid)}
     .cell.thick-bottom{border-bottom:2.5px solid var(--subgrid)}
 
@@ -72,9 +70,7 @@
   </main>
 
   <!-- floating 3x3 image picker -->
-  <div id="picker" class="picker hidden" role="dialog" aria-label="選擇圖像">
-    <!-- picks injected by JS -->
-  </div>
+  <div id="picker" class="picker hidden" role="dialog" aria-label="選擇圖像"></div>
 
 <script>
 (() => {
@@ -88,7 +84,7 @@
       </defs>
       <circle cx='100' cy='100' r='82' fill='${bg}' filter='url(%23s)'/>
       <text x='50%' y='54%' text-anchor='middle' dominant-baseline='middle' font-size='120' font-family='system-ui, sans-serif' fill='white' font-weight='800'>${n}</text>
-    </svg>`)}`;
+    </svg>`)};
   const demoBG = ['#78a8ff','#ffa3a3','#ffc658','#9fe87f','#b996ff','#ff86d3','#7ad8ff','#ffb36a','#83e6d6'];
   let IMAGES = Array.from({length:9}, (_,i)=> numberSVG(i+1, demoBG[i]));
   async function autoLoadFromImagesFolder(){
@@ -98,8 +94,8 @@
     }catch(e){ /* 保持數字 SVG 占位 */ }
   }
 
-  // 動態設定 favicon：用 IMAGES[0]（若 /images/1.png 存在就會是你的貼圖）
-  function setFaviconAuto(){
+  // ======= favicon 自動套用 =======
+  async function setFaviconAuto(){
     const apply = (src)=>{
       const ensure = (rel) => {
         let link = document.querySelector(`link[rel="${rel}"]`);
@@ -109,10 +105,163 @@
       ensure('icon').href = src;
       ensure('apple-touch-icon').href = src;
     };
-    // 依序嘗試 Favicon.png → favicon.png → 退回第一張圖像
-    (async () => {
+    try{ const r1 = await fetch('Favicon.png',{method:'HEAD'}); if(r1.ok){ apply('Favicon.png'); return; } }catch(e){}
+    try{ const r2 = await fetch('favicon.png',{method:'HEAD'}); if(r2.ok){ apply('favicon.png'); return; } }catch(e){}
+    apply(IMAGES[0]);
+  }
+
+  // ======= 內建 Sudoku 題目與解答（經典例） =======
+  const SOLVED = [
+    5,3,4,6,7,8,9,1,2,
+    6,7,2,1,9,5,3,4,8,
+    1,9,8,3,4,2,5,6,7,
+    8,5,9,7,6,1,4,2,3,
+    4,2,6,8,5,3,7,9,1,
+    7,1,3,9,2,4,8,5,6,
+    9,6,1,5,3,7,2,8,4,
+    2,8,7,4,1,9,6,3,5,
+    3,4,5,2,8,6,1,7,9,
+  ];
+  const PUZZLE = [
+    5,3,0,0,7,0,0,0,0,
+    6,0,0,1,9,5,0,0,0,
+    0,9,8,0,0,0,0,6,0,
+    8,0,0,0,6,0,0,0,3,
+    4,0,0,8,0,3,0,0,1,
+    7,0,0,0,2,0,0,0,6,
+    0,6,0,0,0,0,2,8,0,
+    0,0,0,4,1,9,0,0,5,
+    0,0,0,0,8,0,0,7,9,
+  ];
+
+  // ======= 狀態 =======
+  const boardEl = document.getElementById('board');
+  const picker = document.getElementById('picker');
+  const size = 9;
+  const state = {cells: PUZZLE.slice(), given: new Set(), selectedIndex: -1, highlight: null};
+  PUZZLE.forEach((v,i)=>{ if (v>0) state.given.add(i); });
+
+  // ======= UI：棋盤 =======
+  function buildBoard(){
+    boardEl.innerHTML = '';
+    for (let r=0; r<size; r++){
+      for (let c=0; c<size; c++){
+        const i = r*size + c;
+        const cell = document.createElement('div');
+        cell.className = 'cell' + ((Math.floor(r/3)+Math.floor(c/3))%2? ' alt':'');
+        if ((c+1)%3===0) cell.classList.add('thick-right');
+        if ((r+1)%3===0) cell.classList.add('thick-bottom');
+        cell.dataset.index = i;
+        cell.addEventListener('click', onCellClick);
+        cell.addEventListener('dblclick', ()=> tryPlace(i,0));
+        boardEl.appendChild(cell);
+      }
+    }
+    render();
+  }
+
+  // ======= 3x3 選擇器 =======
+  function buildPicker(){
+    picker.innerHTML = '';
+    picker.addEventListener('click', (e)=> e.stopPropagation());
+    for (let n=1; n<=9; n++){
+      const b = document.createElement('button');
+      b.type='button'; b.className='pick'; b.dataset.value=n; b.title=String(n);
+      const img = document.createElement('img'); img.src = IMAGES[n-1]; img.alt = `選 ${n}`; b.appendChild(img);
+      b.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const i = state.selectedIndex;
+        if (i>=0) { tryPlace(i, n); }
+        hidePicker();
+        setHighlight(n);
+      });
+      picker.appendChild(b);
+    }
+  }
+  function showPickerForCell(cell){
+    const rect = cell.getBoundingClientRect();
+    const top = window.scrollY + rect.bottom + 8;
+    const left = window.scrollX + rect.left;
+    picker.style.top = `${top}px`; picker.style.left = `${left}px`;
+    picker.classList.remove('hidden');
+  }
+  function hidePicker(){ picker.classList.add('hidden'); state.selectedIndex = -1; }
+  document.addEventListener('click', (e)=>{ if (!picker.contains(e.target) && !e.target.classList.contains('cell')) hidePicker(); });
+
+  // ======= 事件 =======
+  function onCellClick(e){
+    const i = Number(e.currentTarget.dataset.index);
+    const v = state.cells[i];
+    setHighlight(v); // 點有值就高亮
+    if (state.given.has(i)) return; // 題目鎖定
+    state.selectedIndex = i;
+    showPickerForCell(e.currentTarget);
+  }
+  function tryPlace(i, v){
+    if (state.given.has(i)) return;
+    state.cells[i] = v; // 0 清空
+    render();
+  }
+  document.addEventListener('keydown', (e)=>{
+    if (state.selectedIndex<0) { if (e.key==='Escape') { hidePicker(); setHighlight(null); } return; }
+    if (e.key>='1' && e.key<='9'){
+      const n = Number(e.key); tryPlace(state.selectedIndex, n); hidePicker(); setHighlight(n);
+    } else if (e.key==='Backspace' || e.key==='Delete' || e.key==='0'){ tryPlace(state.selectedIndex, 0); hidePicker(); }
+    else if (e.key==='Escape'){ hidePicker(); setHighlight(null); }
+  });
+
+  // ======= 高亮同圖案 =======
+  function setHighlight(v){ state.highlight = (v && v>0) ? v : null; render(); }
+
+  // ======= 繪製 =======
+  function render(){
+    boardEl.querySelectorAll('.cell').forEach((cell)=>{
+      cell.className = cell.className.replace(/(given|error|ok|hl)/g,'').trim();
+      const i = Number(cell.dataset.index);
+      const r = Math.floor(i/9), c = i%9;
+      // 重新套交錯底色與粗框（避免上面清 class 影響）
+      cell.classList.toggle('alt', ((Math.floor(r/3)+Math.floor(c/3))%2===1));
+      cell.classList.toggle('thick-right', ((c+1)%3===0));
+      cell.classList.toggle('thick-bottom', ((r+1)%3===0));
+
+      cell.innerHTML = '';
+      const v = state.cells[i];
+      if (v>0){ const img = document.createElement('img'); img.src = IMAGES[v-1]; img.alt = `值 ${v}`; cell.appendChild(img); }
+      if (state.given.has(i)) cell.classList.add('given');
+      if (state.highlight && v===state.highlight) cell.classList.add('hl');
+    });
+  }
+
+  // ======= 驗證 =======
+  function validate(){
+    const errors = new Set();
+    const rows = Array.from({length:9}, ()=> new Map());
+    const cols = Array.from({length:9}, ()=> new Map());
+    const box = Array.from({length:9}, ()=> new Map());
+    for (let i=0;i<81;i++){
+      const v = state.cells[i]; if (!v) continue;
+      const r = Math.floor(i/9), c = i%9, b = Math.floor(r/3)*3 + Math.floor(c/3);
+      const touch = (m)=>{ if (m.has(v)) { errors.add(i); errors.add(m.get(v)); } else m.set(v, i); };
+      touch(rows[r]); touch(cols[c]); touch(box[b]);
+    }
+    const filled = state.cells.every(v=> v>0);
+    if (filled){ for (let i=0;i<81;i++){ if (state.cells[i] !== SOLVED[i]) errors.add(i); } }
+    boardEl.querySelectorAll('.cell').forEach((cell)=>{
+      const i = Number(cell.dataset.index);
+      cell.classList.toggle('error', errors.has(i));
+      cell.classList.toggle('ok', !errors.has(i) && state.cells[i]>0);
+    });
+    if (filled && errors.size===0){ alert('恭喜完成！'); }
+  }
+
+  // ======= 控制鈕 =======
+  document.getElementById('btnCheck').onclick = validate;
+  document.getElementById('btnReset').onclick = ()=>{ setHighlight(null); state.cells = PUZZLE.slice(); render(); };
+
+  // ======= 啟動 =======
+  (async () => {
     await autoLoadFromImagesFolder();
-    setFaviconAuto();
+    await setFaviconAuto();
     buildBoard();
     buildPicker();
   })();
