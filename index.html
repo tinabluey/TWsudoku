@@ -89,21 +89,26 @@
   });
 
   // ===== IMAGES：預設用彩色數字圓形；若 /images/1.png~9.png 存在會自動載入 =====
-  const numberSVG = (n, bg) => `data:image/svg+xml;utf8,${encodeURIComponent(`
-    <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'>
-      <defs><filter id='s' x='-20%' y='-20%' width='140%' height='140%'><feDropShadow dx='0' dy='6' stdDeviation='6' flood-opacity='.18'/></filter></defs>
-      <circle cx='100' cy='100' r='82' fill='${bg}' filter='url(%23s)'/>
-      <text x='50%' y='54%' text-anchor='middle' dominant-baseline='middle' font-size='120' font-family='system-ui, sans-serif' fill='white' font-weight='800'>${n}</text>
-    </svg>`)};
+  const numberSVG = function(n, bg){
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">' +
+      '<defs><filter id="s" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="6" stdDeviation="6" flood-opacity=".18"/></filter></defs>' +
+      '<circle cx="100" cy="100" r="82" fill="'+bg+'" filter="url(#s)"/>' +
+      '<text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" font-size="120" font-family="system-ui, sans-serif" fill="white" font-weight="800">'+n+'</text>' +
+      '</svg>'
+    );
+  };
   const demoBG = ['#78a8ff','#ffa3a3','#ffc658','#9fe87f','#b996ff','#ff86d3','#7ad8ff','#ffb36a','#83e6d6'];
-  let IMAGES = Array.from({length:9}, (_,i)=> numberSVG(i+1, demoBG[i]));
+  let IMAGES = Array.from({length:9}, function(_,i){ return numberSVG(i+1, demoBG[i]); });
   async function autoLoadFromImagesFolder(){
-    const loaders = Array.from({length:9}, (_,i)=> fetch(`images/${i+1}.png`,{method:'GET'})
-      .then(r=> r.ok? r.blob(): Promise.reject('no'))
-      .then(b=> new Promise(res=>{const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(b);})))
-    return Promise.allSettled(loaders).then(results=>{
-      const ok = results.every(r=> r.status==='fulfilled');
-      if (ok) IMAGES = results.map(r=> r.value);
+    const loaders = Array.from({length:9}, function(_,i){
+      return fetch('images/'+(i+1)+'.png', {method:'GET'})
+        .then(function(r){ return r.ok ? r.blob() : Promise.reject('no'); })
+        .then(function(b){ return new Promise(function(res){ var fr=new FileReader(); fr.onload=function(){res(fr.result)}; fr.readAsDataURL(b); }); });
+    });
+    return Promise.allSettled(loaders).then(function(results){
+      var ok = results.every(function(r){ return r.status==='fulfilled'; });
+      if (ok) IMAGES = results.map(function(r){ return r.value; });
     });
   }
 
@@ -125,22 +130,22 @@
   const statusEl = document.getElementById('status');
   const size = 9;
   const state = {cells: PUZZLE.slice(), given: new Set(), selectedIndex: -1, highlight: null};
-  PUZZLE.forEach((v,i)=>{ if (v>0) state.given.add(i); });
+  PUZZLE.forEach(function(v,i){ if (v>0) state.given.add(i); });
 
   // ===== UI：棋盤 =====
   function buildBoard(){
     boardEl.innerHTML = '';
-    for (let r=0; r<size; r++){
-      for (let c=0; c<size; c++){
-        const i = r*size + c;
-        const cell = document.createElement('div');
+    for (var r=0; r<size; r++){
+      for (var c=0; c<size; c++){
+        var i = r*size + c;
+        var cell = document.createElement('div');
         cell.classList.add('cell');
         if ((Math.floor(r/3)+Math.floor(c/3))%2===1) cell.classList.add('alt');
         if ((c+1)%3===0) cell.classList.add('thick-right');
         if ((r+1)%3===0) cell.classList.add('thick-bottom');
         cell.dataset.index = i;
         cell.addEventListener('click', onCellClick);
-        cell.addEventListener('dblclick', ()=> tryPlace(i,0));
+        cell.addEventListener('dblclick', function(ii){ return function(){ tryPlace(ii,0); };}(i));
         boardEl.appendChild(cell);
       }
     }
@@ -150,42 +155,44 @@
   // ===== 3x3 選擇器 =====
   function buildPicker(){
     picker.innerHTML = '';
-    picker.addEventListener('click', (e)=> e.stopPropagation());
-    for (let n=1; n<=9; n++){
-      const b = document.createElement('button');
+    picker.addEventListener('click', function(e){ e.stopPropagation(); });
+    for (var n=1; n<=9; n++){
+      var b = document.createElement('button');
       b.type='button'; b.className='pick'; b.dataset.value=n; b.title=String(n);
-      const img = document.createElement('img'); img.src = IMAGES[n-1]; img.alt = `選 ${n}`; b.appendChild(img);
-      b.addEventListener('click', (e)=>{
-        e.stopPropagation();
-        const i = state.selectedIndex; if (i>=0) tryPlace(i, n);
-        hidePicker(); setHighlight(n);
-      });
+      var img = document.createElement('img'); img.src = IMAGES[n-1]; img.alt = '選 '+n; b.appendChild(img);
+      b.addEventListener('click', (function(nLocal){
+        return function(e){
+          e.stopPropagation();
+          var i = state.selectedIndex; if (i>=0) tryPlace(i, nLocal);
+          hidePicker(); setHighlight(nLocal);
+        };
+      })(n));
       picker.appendChild(b);
     }
   }
   function showPickerForCell(cell){
-    const rect = cell.getBoundingClientRect();
-    const top = window.scrollY + rect.bottom + 8;
-    const left = window.scrollX + rect.left;
-    picker.style.top = `${top}px`; picker.style.left = `${left}px`;
+    var rect = cell.getBoundingClientRect();
+    var top = window.scrollY + rect.bottom + 8;
+    var left = window.scrollX + rect.left;
+    picker.style.top = top+'px'; picker.style.left = left+'px';
     picker.classList.remove('hidden');
   }
   function hidePicker(){ picker.classList.add('hidden'); state.selectedIndex = -1; }
-  document.addEventListener('click', (e)=>{ if (!picker.contains(e.target) && !e.target.classList.contains('cell')) hidePicker(); });
+  document.addEventListener('click', function(e){ if (!picker.contains(e.target) && !e.target.classList.contains('cell')) hidePicker(); });
 
   // ===== 事件 =====
   function onCellClick(e){
-    const i = Number(e.currentTarget.dataset.index);
-    const v = state.cells[i];
+    var i = Number(e.currentTarget.dataset.index);
+    var v = state.cells[i];
     setHighlight(v);
     if (state.given.has(i)) return; // 題目鎖定
     state.selectedIndex = i;
     showPickerForCell(e.currentTarget);
   }
   function tryPlace(i, v){ if (!state.given.has(i)) { state.cells[i] = v; render(); } }
-  document.addEventListener('keydown', (e)=>{
+  document.addEventListener('keydown', function(e){
     if (state.selectedIndex<0) { if (e.key==='Escape') { hidePicker(); setHighlight(null); } return; }
-    if (e.key>='1' && e.key<='9'){ const n = Number(e.key); tryPlace(state.selectedIndex, n); hidePicker(); setHighlight(n); }
+    if (e.key>='1' && e.key<='9'){ var n = Number(e.key); tryPlace(state.selectedIndex, n); hidePicker(); setHighlight(n); }
     else if (e.key==='Backspace' || e.key==='Delete' || e.key==='0'){ tryPlace(state.selectedIndex, 0); hidePicker(); }
     else if (e.key==='Escape'){ hidePicker(); setHighlight(null); }
   });
@@ -195,15 +202,15 @@
 
   // ===== 繪製 =====
   function render(){
-    const cells = boardEl.querySelectorAll('.cell');
-    for (let i=0; i<cells.length; i++){
-      const cell = cells[i];
-      const v = state.cells[i];
+    var cells = boardEl.querySelectorAll('.cell');
+    for (var i=0; i<cells.length; i++){
+      var cell = cells[i];
+      var v = state.cells[i];
       // 清內容 & 移除狀態 class
       cell.classList.remove('given','error','ok','hl');
       cell.innerHTML = '';
       // 圖像
-      if (v>0){ const img = document.createElement('img'); img.src = IMAGES[v-1]; img.alt = `值 ${v}`; cell.appendChild(img); }
+      if (v>0){ var img = document.createElement('img'); img.src = IMAGES[v-1]; img.alt = '值 '+v; cell.appendChild(img); }
       // 標示
       if (state.given.has(i)) cell.classList.add('given');
       if (state.highlight && v===state.highlight) cell.classList.add('hl');
@@ -212,19 +219,19 @@
 
   // ===== 驗證 =====
   function validate(){
-    const errors = new Set();
-    const rows = Array.from({length:9}, ()=> new Map());
-    const cols = Array.from({length:9}, ()=> new Map());
-    const box = Array.from({length:9}, ()=> new Map());
-    for (let i=0;i<81;i++){
-      const v = state.cells[i]; if (!v) continue;
-      const r = Math.floor(i/9), c = i%9, b = Math.floor(r/3)*3 + Math.floor(c/3);
-      const touch = (m)=>{ if (m.has(v)) { errors.add(i); errors.add(m.get(v)); } else m.set(v, i); };
+    var errors = new Set();
+    var rows = Array.from({length:9}, function(){ return new Map(); });
+    var cols = Array.from({length:9}, function(){ return new Map(); });
+    var box  = Array.from({length:9}, function(){ return new Map(); });
+    for (var i=0;i<81;i++){
+      var v = state.cells[i]; if (!v) continue;
+      var r = Math.floor(i/9), c = i%9, b = Math.floor(r/3)*3 + Math.floor(c/3);
+      var touch = function(m){ if (m.has(v)) { errors.add(i); errors.add(m.get(v)); } else m.set(v, i); };
       touch(rows[r]); touch(cols[c]); touch(box[b]);
     }
-    const filled = state.cells.every(v=> v>0);
-    if (filled){ for (let i=0;i<81;i++){ if (state.cells[i] !== SOLVED[i]) errors.add(i); } }
-    boardEl.querySelectorAll('.cell').forEach((cell, i)=>{
+    var filled = state.cells.every(function(v){ return v>0; });
+    if (filled){ for (var j=0;j<81;j++){ if (state.cells[j] !== SOLVED[j]) errors.add(j); } }
+    boardEl.querySelectorAll('.cell').forEach(function(cell, i){
       cell.classList.toggle('error', errors.has(i));
       cell.classList.toggle('ok', !errors.has(i) && state.cells[i]>0);
     });
@@ -233,10 +240,10 @@
 
   // ===== 控制鈕 =====
   document.getElementById('btnCheck').onclick = validate;
-  document.getElementById('btnReset').onclick = ()=>{ setHighlight(null); state.cells = PUZZLE.slice(); render(); };
+  document.getElementById('btnReset').onclick = function(){ setHighlight(null); state.cells = PUZZLE.slice(); render(); };
 
   // ===== 啟動 =====
-  (async () => {
+  (async function () {
     try{
       await autoLoadFromImagesFolder();
       buildBoard();
@@ -244,8 +251,11 @@
       statusEl.textContent = '就緒';
     }catch(ex){
       statusEl.textContent = '初始化失敗';
-      errBar.textContent = `初始化失敗：${ex.message||ex}`; errBar.style.display='block';
+      errBar.textContent = '初始化失敗：' + (ex.message||ex);
+      errBar.style.display='block';
     }
   })();
 })();
-<
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>TWZOO Sudoku Health</title>
+<h1>TWZOO Sudoku Health Check</h1>
+<p id="msg">Loading…</p>
+<script>
+  try {
+    document.getElementById('msg').textContent = 'JS OK';
+  } catch (e) {
+    document.write('<pre>JS error: '+ e.message +'</pre>');
+  }
+</script>
