@@ -16,10 +16,11 @@
     }
     *{box-sizing:border-box}
     body{margin:0;font-family: ui-sans-serif, system-ui, -apple-system, "Noto Sans TC", "PingFang TC", Arial, sans-serif; background:var(--bg); color:var(--ink);}    
-    header{padding:14px 16px; display:flex; gap:12px; align-items:center; justify-content:space-between; border-bottom:1px solid #f0e3ea; background:#fff; position:sticky; top:0; z-index:2}
-    header .title{font-weight:700; letter-spacing:.2px; color: var(--subgrid)}
-    header .title small{display:block; font-weight:500; color:var(--muted)}
-    .controls{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+    header{padding:14px 16px; border-bottom:1px solid #f0e3ea; background:#fff; position:sticky; top:0; z-index:2}
+    .head{display:flex; flex-direction:column; gap:6px}
+    .title{font-weight:700; letter-spacing:.2px; color: var(--subgrid); font-size:20px}
+    .subtitle{color:var(--muted); font-weight:500; font-size:13px}
+    .actions{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
     .pill{font-size:12px; padding:6px 8px; border-radius:999px; border:1px solid #e8d3df; color:#6b6b77; background:#fff}
     button{border:1.5px solid #e8d3df; background:#fff; padding:9px 12px; border-radius:12px; cursor:pointer; font-weight:600}
     button:hover{background:#fff6fb}
@@ -55,21 +56,24 @@
 <body>
   <div id="err"></div>
   <header>
-    <div class="title">TWZOO Sudoku<small>點可編輯的格子，會跳出 3×3 圖像選單；雙擊格子清除。</small></div>
-    <div class="controls">
-      <span id="status" class="pill">初始化中…</span>
-      <button id="btnCheck" class="primary">檢查</button>
-      <button id="btnReset">重置到題目</button>
+    <div class="head">
+      <div class="title">TWZOO Sudoku</div>
+      <div class="subtitle">點選空格會跳出選單、雙擊格子清除</div>
+      <div class="actions">
+        <span id="status" class="pill">就緒</span>
+        <button id="btnCheck" class="primary">檢查</button>
+        <button id="btnReset">重置到題目</button>
+      </div>
     </div>
   </header>
 
   <main>
     <section class="board-wrap">
-      <!-- 這裡加了行內樣式：強制 9 欄 grid，避免整盤變長條 -->
+      <!-- 行內樣式強制 9 欄 grid，避免整盤變長條 -->
       <div id="board" class="board" aria-label="9x9 board"
            style="display:grid;grid-template-columns:repeat(9,minmax(34px,1fr));gap:0"></div>
     </section>
-    <div class="hint">提示：鍵盤 1–9 也可填入；Backspace 清除。題目內建不可移動的「已知格」。</div>
+    <div class="hint">提示：鍵盤 1–9 也可填入、Backspace 清除</div>
   </main>
 
   <!-- floating 3x3 image picker -->
