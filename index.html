@@ -14,8 +14,16 @@
       --grid:#f3b3cc; --subgrid:#e784a6; --shadow: 0 10px 30px rgba(0,0,0,.06);
     }
     *{box-sizing:border-box}
-    body{margin:0;font-family: ui-sans-serif, system-ui, -apple-system, "Noto Sans TC", "PingFang TC", Arial, sans-serif; background:var(--bg); color:var(--ink);}    
-    header{padding:20px 16px; border-bottom:1px solid #f0e3ea; background:#fff; position:sticky; top:0; z-index:2}
+    html,body{margin:0; height:100%; background:var(--bg); color:var(--ink); font-family: ui-sans-serif, system-ui, -apple-system, "Noto Sans TC", "PingFang TC", Arial, sans-serif;}
+    header{
+      padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 16px;
+      border-bottom:1px solid #f0e3ea; background:#fff; position:sticky; top:0; z-index:2;
+      will-change: transform;
+    }
+    /* iPhone (small screens): avoid sticky glitches by disabling sticky */
+    @media (max-width: 640px){
+      header{ position: static; }
+    }
     .head{display:flex; flex-direction:column; gap:8px; align-items:center; text-align:center}
     .title{font-weight:700; letter-spacing:.2px; color: var(--subgrid); font-size:22px}
     .subtitle{color:var(--muted); font-weight:500; font-size:13px}
@@ -25,7 +33,7 @@
     button:hover{background:#fff6fb}
     .primary{background:var(--brand); color:#fff; border-color:var(--brand)}
 
-    main{max-width:1100px; margin:0 auto; padding:20px; text-align:center}
+    main{max-width:1100px; margin:0 auto; padding:16px; display:flex; flex-direction:column; align-items:center; gap:12px;}
 
     /* Board wrapper & base */
     .board-wrap{background:#fff;border:2px solid #f0e3ea; border-radius:18px; padding:16px; box-shadow:var(--shadow); display:inline-block}
@@ -46,10 +54,12 @@
     .pick img{max-width:92%; max-height:92%}
     .hidden{display:none}
 
-    .hint{margin:14px 4px 0; color:var(--muted); font-size:12px; text-align:center}
+    /* Status below board */
+    .below{display:flex; justify-content:center; width:100%}
+    .below .pill{background:#fff;}
 
     /* Footer */
-    footer{margin:24px 0 32px; text-align:center; color:var(--muted); font-size:12px}
+    footer{margin:8px 0 24px; text-align:center; color:var(--muted); font-size:12px; width:100%}
 
     /* Error overlay */
     #err{position:fixed; left:0; right:0; top:0; background:#ffeaea; color:#b00020; padding:10px 14px; border-bottom:2px solid #ffb3b3; font-size:12px; display:none; z-index:99}
@@ -62,7 +72,6 @@
       <div class="title">TWZOO Sudoku</div>
       <div class="subtitle" id="subtitle">點選空格會跳出選單、雙擊格子清除</div>
       <div class="actions">
-        <span id="status" class="pill">就緒</span>
         <button id="btnCheck" class="primary">檢查</button>
         <button id="btnReset">重置到題目</button>
         <button id="btnNext">下一題</button>
@@ -72,11 +81,13 @@
 
   <main>
     <section class="board-wrap">
-      <!-- 盤面更大且保持正方形。clamp(320px, 90vmin, 960px) -->
+      <!-- 寬度使用 min()，讓 iPhone 置中且最大化；JS 會讓高度=寬度保持正方形 -->
       <div id="board" class="board" aria-label="9x9 board"
-           style="display:grid;grid-template-columns:repeat(9,1fr);gap:0;width:clamp(320px,90vmin,960px)"></div>
+           style="display:grid;grid-template-columns:repeat(9,1fr);gap:0;width:min(96vmin, calc(100vw - 24px), 960px)"></div>
     </section>
-    <div class="hint" id="hint">提示：鍵盤 1–9 也可填入、Backspace 清除</div>
+
+    <!-- 狀態膠囊改到棋盤與 footer 之間 -->
+    <div class="below"><span id="status" class="pill">就緒</span></div>
   </main>
 
   <footer id="footer">Design by Tinabluey</footer>
@@ -99,7 +110,6 @@
   var I18N = {
     'zh': {
       subtitle: '點選空格會跳出選單、雙擊格子清除',
-      hint: '提示：鍵盤 1–9 也可填入、Backspace 清除',
       ready: '就緒',
       check: '檢查',
       reset: '重置到題目',
@@ -110,8 +120,7 @@
       footer: 'Design by Tinabluey'
     },
     'en': {
-      subtitle: 'Tap empty cell to open picker, double‑tap to clear',
-      hint: 'Hint: Keyboard 1–9 to place, Backspace to clear',
+      subtitle: 'Tap the empty box to enter, double tap to clear',
       ready: 'Ready',
       check: 'Check',
       reset: 'Reset puzzle',
@@ -135,7 +144,6 @@
   var T = I18N[LANG] || I18N['zh'];
   function applyI18N(){
     document.getElementById('subtitle').textContent = T.subtitle;
-    document.getElementById('hint').textContent = T.hint;
     document.getElementById('status').textContent = T.ready;
     document.getElementById('btnCheck').textContent = T.check;
     document.getElementById('btnReset').textContent = T.reset;
@@ -190,7 +198,7 @@
 
   var PUZZLES = [
     {puzzle: PUZZLE1, solved: SOLVED1},
-    {puzzle: PUZZLE2, solved: SOLVED2}
+    {puzzle: SOLVED2.map((x,i)=>PUZZLE2[i]?PUZZLE2[i]:0), solved: SOLVED2}
   ];
   var puzzleIndex = 0;
 
@@ -250,7 +258,7 @@
     }
     render();
     squareUp();
-    document.getElementById('status').textContent = T.ready;
+    statusEl.textContent = T.ready;
   }
 
   // ===== Picker =====
