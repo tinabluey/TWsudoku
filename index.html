@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title> TWZOO Sudoku </title>
+  <title>Image Sudoku — 極簡版</title>
   <meta name="theme-color" content="#ffffff" />
   <!-- 將在 JS 中把 favicon 設為 IMAGES[0]（預設為數字1的圓形；若有 images/1.png 會自動用你的貼圖） -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Ccircle cx='100' cy='100' r='82' fill='%2378a8ff'/%3E%3Ctext x='50%25' y='54%25' text-anchor='middle' dominant-baseline='middle' font-size='120' font-family='system-ui, sans-serif' fill='white' font-weight='800'%3E1%3C/text%3E%3C/svg%3E" type="image/svg+xml" />
@@ -56,7 +56,7 @@
 </head>
 <body>
   <header>
-    <div class="title"> TWZOO Sudoku <small>點選格子會跳出選單、雙擊格子清除。</small></div>
+    <div class="title">Image Sudoku <small>點可編輯的格子，會跳出 3×3 圖像選單；雙擊格子清除。</small></div>
     <div class="controls">
       <button id="btnCheck" class="primary">檢查</button>
       <button id="btnReset">重置到題目</button>
@@ -67,7 +67,7 @@
     <section class="board-wrap">
       <div id="board" class="board" aria-label="9x9 board"></div>
     </section>
-    <div class="hint">提示：鍵盤 1–9 也可填入、Backspace 清除。</div>
+    <div class="hint">提示：鍵盤 1–9 也可填入；Backspace 清除。題目內建不可移動的「已知格」。</div>
   </main>
 
   <!-- floating 3x3 image picker -->
