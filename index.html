@@ -6,6 +6,7 @@
   <title>TWZOO Sudoku</title>
   <meta name="theme-color" content="#ffffff" />
   <!-- 若根目錄有 favicon.png 或 Favicon.png，瀏覽器會自動採用。沒有也沒關係。 -->
+  <!-- 這兩行提供預設 favicon；下方腳本會自動偵測 Favicon.png / favicon.png / favicon.ico 並覆蓋為可用者 -->
   <link rel="icon" href="favicon.png" type="image/png" />
   <link rel="apple-touch-icon" href="favicon.png" />
   <style>
@@ -17,7 +18,7 @@
     *{box-sizing:border-box}
     body{margin:0;font-family: ui-sans-serif, system-ui, -apple-system, "Noto Sans TC", "PingFang TC", Arial, sans-serif; background:var(--bg); color:var(--ink);}    
     header{padding:14px 16px; display:flex; gap:12px; align-items:center; justify-content:space-between; border-bottom:1px solid #f0e3ea; background:#fff; position:sticky; top:0; z-index:2}
-    header .title{font-weight:700; letter-spacing:.2px}
+    header .title{font-weight:700; letter-spacing:.2px; color: var(--subgrid)}
     header .title small{display:block; font-weight:500; color:var(--muted)}
     .controls{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
     .pill{font-size:12px; padding:6px 8px; border-radius:999px; border:1px solid #e8d3df; color:#6b6b77; background:#fff}
@@ -41,9 +42,9 @@
     .cell.thick-bottom{border-bottom:2.5px solid var(--subgrid)}
 
     /* Picker */
-    .picker{position:absolute; z-index:5; display:grid; grid-template-columns:repeat(3,56px); gap:8px; padding:10px; background:#fff; border:2px solid #f0e3ea; border-radius:14px; box-shadow:var(--shadow)}
-    .pick{width:56px; height:56px; display:flex; align-items:center; justify-content:center; border:1.5px dashed #e4c1d4; border-radius:12px; cursor:pointer; background:var(--cell-alt)}
-    .pick img{max-width:80%; max-height:80%}
+    .picker{position:absolute; z-index:5; display:grid; grid-template-columns:repeat(3,72px); gap:8px; padding:12px; background:#fff; border:2px solid #f0e3ea; border-radius:14px; box-shadow:var(--shadow)}
+    .pick{width:72px; height:72px; display:flex; align-items:center; justify-content:center; border:1.5px dashed #e4c1d4; border-radius:12px; cursor:pointer; background:var(--cell-alt)}
+    .pick img{max-width:92%; max-height:92%}
     .hidden{display:none}
 
     .hint{margin:10px 4px; color:var(--muted); font-size:12px}
@@ -52,7 +53,9 @@
     #err{position:fixed; left:0; right:0; top:0; background:#ffeaea; color:#b00020; padding:10px 14px; border-bottom:2px solid #ffb3b3; font-size:12px; display:none; z-index:99}
 
     @media (max-width:520px){
-      .picker{grid-template-columns:repeat(3,48px)}
+      .picker{grid-template-columns:repeat(3,56px)}
+      .pick{width:56px; height:56px}
+    }
       .pick{width:48px; height:48px}
     }
   </style>
@@ -245,6 +248,23 @@
     }catch(ex){
       statusEl.textContent = '初始化失敗';
       errBar.textContent = `初始化失敗：${ex.message||ex}`; errBar.style.display='block';
+    }
+  })();
+})();
+// --- Favicon auto-check：偵測實際可用檔名並套用（解決大小寫或快取問題） ---
+(function(){
+  var rels=['icon','shortcut icon','apple-touch-icon'];
+  function setFav(href){
+    for(var i=0;i<rels.length;i++){
+      var link=document.querySelector('link[rel="'+rels[i]+'"]');
+      if(!link){ link=document.createElement('link'); link.rel=rels[i]; document.head.appendChild(link); }
+      link.href=href;
+    }
+  }
+  var candidates=['favicon.png','Favicon.png','favicon.ico'];
+  (async function(){
+    for(var i=0;i<candidates.length;i++){
+      try{ var r=await fetch(candidates[i],{method:'HEAD',cache:'no-store'}); if(r.ok){ setFav(candidates[i]+'?v='+(Date.now())); return; } }catch(e){}
     }
   })();
 })();
