@@ -4,6 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title> TWZOO Sudoku </title>
+  <meta name="theme-color" content="#ffffff" />
+  <!-- 將在 JS 中把 favicon 設為 IMAGES[0]（預設為數字1的圓形；若有 images/1.png 會自動用你的貼圖） -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Ccircle cx='100' cy='100' r='82' fill='%2378a8ff'/%3E%3Ctext x='50%25' y='54%25' text-anchor='middle' dominant-baseline='middle' font-size='120' font-family='system-ui, sans-serif' fill='white' font-weight='800'%3E1%3C/text%3E%3C/svg%3E" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Ccircle cx='100' cy='100' r='82' fill='%2378a8ff'/%3E%3Ctext x='50%25' y='54%25' text-anchor='middle' dominant-baseline='middle' font-size='120' font-family='system-ui, sans-serif' fill='white' font-weight='800'%3E1%3C/text%3E%3C/svg%3E" />
   <style>
     :root{
       --bg:#fffafc; --ink:#2d2a32; --muted:#8b8b99; --brand:#6aa5ff; --accent:#ffd166;
@@ -30,6 +34,7 @@
     .cell.given{background:var(--given)}
     .cell.error{background:var(--error)}
     .cell.ok{background:var(--ok)}
+    .cell.hl{box-shadow:0 0 0 3px var(--accent) inset; position:relative}
     .cell img{max-width:80%; max-height:80%; pointer-events:none}
     .cell .idx{position:absolute; left:6px; top:6px; font-size:10px; color:#caa}
     .cell.thick-right{border-right:2.5px solid var(--subgrid)}
@@ -51,10 +56,10 @@
 </head>
 <body>
   <header>
-    <div class="title">TWZOO Sudoku  <small>點選格子，會跳出選單；雙擊格子清除。</small></div>
+    <div class="title"> TWZOO Sudoku <small>點選格子會跳出選單、雙擊格子清除。</small></div>
     <div class="controls">
       <button id="btnCheck" class="primary">檢查</button>
-      <button id="btnReset">重置題目</button>
+      <button id="btnReset">重置到題目</button>
     </div>
   </header>
 
@@ -62,7 +67,7 @@
     <section class="board-wrap">
       <div id="board" class="board" aria-label="9x9 board"></div>
     </section>
-    <div class="hint">提示：鍵盤 1–9 也可填入；Backspace 清除。</div>
+    <div class="hint">提示：鍵盤 1–9 也可填入、Backspace 清除。</div>
   </main>
 
   <!-- floating 3x3 image picker -->
@@ -90,6 +95,17 @@
       const loaders = Array.from({length:9}, (_,i)=> fetch(`images/${i+1}.png`).then(r=> r.ok? r.blob(): Promise.reject()).then(b=> new Promise(res=>{const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(b);})));    
       IMAGES = await Promise.all(loaders);
     }catch(e){ /* 保持數字 SVG 占位 */ }
+  }
+
+  // 動態設定 favicon：用 IMAGES[0]（若 /images/1.png 存在就會是你的貼圖）
+  function setFavicon(src){
+    const ensure = (rel) => {
+      let link = document.querySelector(`link[rel="${rel}"]`);
+      if (!link){ link = document.createElement('link'); link.rel = rel; document.head.appendChild(link); }
+      return link;
+    };
+    ensure('icon').href = src;
+    ensure('apple-touch-icon').href = src;
   }
 
   // ======= 內建 Sudoku 題目與解答（Wikipedia 經典例） =======
@@ -122,7 +138,7 @@
   const boardEl = document.getElementById('board');
   const picker = document.getElementById('picker');
   const size = 9;
-  const state = {cells: PUZZLE.slice(), given: new Set(), selectedIndex: -1};
+  const state = {cells: PUZZLE.slice(), given: new Set(), selectedIndex: -1, highlight: null};
   PUZZLE.forEach((v,i)=>{ if (v>0) state.given.add(i); });
 
   // ======= UI：建立棋盤 =======
@@ -150,7 +166,10 @@
     for (let n=1; n<=9; n++){
       const b = document.createElement('button'); b.type='button'; b.className='pick'; b.dataset.value=n; b.title=String(n);
       const img = document.createElement('img'); img.src = IMAGES[n-1]; img.alt = `選 ${n}`; b.appendChild(img);
-      b.addEventListener('click', ()=>{ if (state.selectedIndex>=0) { tryPlace(state.selectedIndex, n); hidePicker(); }});
+      b.addEventListener('click', ()=>{ if (state.selectedIndex>=0) { tryPlace(state.selectedIndex, n); hidePicker(); setHighlight(n); }});
+      picker.appendChild(b);
+    }
+  } hidePicker(); }});
       picker.appendChild(b);
     }
   }
@@ -167,32 +186,42 @@
   // ======= 事件 =======
   function onCellClick(e){
     const i = Number(e.currentTarget.dataset.index);
-    if (state.given.has(i)) return; // 鎖定
+    const v = state.cells[i];
+    // 先處理高亮：點到有值的格子就高亮該值，空格清除高亮
+    setHighlight(v);
+    if (state.given.has(i)) return; // 題目鎖定：只允許高亮，不跳選單
     state.selectedIndex = i;
     showPickerForCell(e.currentTarget);
   }
 
-  function tryPlace(i, v){
-    if (state.given.has(i)) return;
-    state.cells[i] = v; // 0 代表清空
-    render();
-  }
-
   // 鍵盤輸入
   document.addEventListener('keydown', (e)=>{
-    if (state.selectedIndex<0) return;
+    if (state.selectedIndex<0) {
+      if (e.key==='Escape') { hidePicker(); setHighlight(null); }
+      return;
+    }
     if (e.key>='1' && e.key<='9'){
-      tryPlace(state.selectedIndex, Number(e.key));
+      const n = Number(e.key);
+      tryPlace(state.selectedIndex, n);
       hidePicker();
+      setHighlight(n);
     } else if (e.key==='Backspace' || e.key==='Delete' || e.key==='0'){
       tryPlace(state.selectedIndex, 0); hidePicker();
+    } else if (e.key==='Escape'){
+      hidePicker(); setHighlight(null);
     }
   });
+
+  // ======= 高亮同圖案 =======
+  function setHighlight(v){
+    state.highlight = (v && v>0) ? v : null;
+    render();
+  }
 
   // ======= 繪製 =======
   function render(){
     boardEl.querySelectorAll('.cell').forEach((cell)=>{
-      cell.classList.remove('given','error','ok');
+      cell.classList.remove('given','error','ok','hl');
       cell.innerHTML = '';
       const i = Number(cell.dataset.index);
       const v = state.cells[i];
@@ -201,6 +230,7 @@
         img.src = IMAGES[v-1]; img.alt = `值 ${v}`; cell.appendChild(img);
       }
       if (state.given.has(i)) cell.classList.add('given');
+      if (state.highlight && v===state.highlight) cell.classList.add('hl');
     });
   }
 
@@ -232,11 +262,12 @@
 
   // ======= 控制鈕 =======
   document.getElementById('btnCheck').onclick = validate;
-  document.getElementById('btnReset').onclick = ()=>{ state.cells = PUZZLE.slice(); render(); };
+  document.getElementById('btnReset').onclick = ()=>{ setHighlight(null); state.cells = PUZZLE.slice(); render(); };
 
   // ======= 啟動 =======
   (async () => {
     await autoLoadFromImagesFolder();
+    setFavicon(IMAGES[0]);
     buildBoard();
     buildPicker();
   })();
