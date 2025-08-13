@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Image Sudoku — 極簡版</title>
+  <style>
+    :root{
+      --bg:#fffafc; --ink:#2d2a32; --muted:#8b8b99; --brand:#6aa5ff; --accent:#ffd166;
+      --cell:#fff; --cell-alt:#fff3f8; --given:#f1f5ff; --error:#ffe2e2; --ok:#e7ffe7;
+      --grid:#f3b3cc; --subgrid:#e784a6; --shadow: 0 10px 30px rgba(0,0,0,.06);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family: ui-sans-serif, system-ui, -apple-system, "Noto Sans TC", "PingFang TC", Arial, sans-serif; background:var(--bg); color:var(--ink);}    
+    header{padding:14px 16px; display:flex; gap:12px; align-items:center; justify-content:space-between; border-bottom:1px solid #f0e3ea; background:#fff; position:sticky; top:0; z-index:2}
+    header .title{font-weight:700; letter-spacing:.2px}
+    header .title small{display:block; font-weight:500; color:var(--muted)}
+    .controls{display:flex; gap:8px; flex-wrap:wrap}
+    button{border:1.5px solid #e8d3df; background:#fff; padding:9px 12px; border-radius:12px; cursor:pointer; font-weight:600}
+    button:hover{background:#fff6fb}
+    .primary{background:var(--brand); color:#fff; border-color:var(--brand)}
+
+    main{max-width:720px; margin:0 auto; padding:18px}
+
+    /* Board */
+    .board-wrap{background:#fff;border:2px solid #f0e3ea; border-radius:18px; padding:16px; box-shadow:var(--shadow)}
+    .board{display:grid; grid-template-columns:repeat(9, minmax(34px, 1fr)); gap:0; border:2.5px solid var(--subgrid); border-radius:12px; overflow:hidden}
+    .cell{border:1.5px solid var(--grid); aspect-ratio:1; background:var(--cell); display:flex; align-items:center; justify-content:center; position:relative; user-select:none}
+    .cell.alt{background:var(--cell-alt)}
+    .cell.given{background:var(--given)}
+    .cell.error{background:var(--error)}
+    .cell.ok{background:var(--ok)}
+    .cell img{max-width:80%; max-height:80%; pointer-events:none}
+    .cell .idx{position:absolute; left:6px; top:6px; font-size:10px; color:#caa}
+    .cell.thick-right{border-right:2.5px solid var(--subgrid)}
+    .cell.thick-bottom{border-bottom:2.5px solid var(--subgrid)}
+
+    /* Picker */
+    .picker{position:absolute; z-index:5; display:grid; grid-template-columns:repeat(3,56px); gap:8px; padding:10px; background:#fff; border:2px solid #f0e3ea; border-radius:14px; box-shadow:var(--shadow)}
+    .pick{width:56px; height:56px; display:flex; align-items:center; justify-content:center; border:1.5px dashed #e4c1d4; border-radius:12px; cursor:pointer; background:var(--cell-alt)}
+    .pick img{max-width:80%; max-height:80%}
+    .hidden{display:none}
+
+    .hint{margin:10px 4px; color:var(--muted); font-size:12px}
+
+    @media (max-width:520px){
+      .picker{grid-template-columns:repeat(3,48px)}
+      .pick{width:48px; height:48px}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">Image Sudoku <small>點可編輯的格子，會跳出 3×3 圖像選單；雙擊格子清除。</small></div>
+    <div class="controls">
+      <button id="btnCheck" class="primary">檢查</button>
+      <button id="btnReset">重置到題目</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="board-wrap">
+      <div id="board" class="board" aria-label="9x9 board"></div>
+    </section>
+    <div class="hint">提示：鍵盤 1–9 也可填入；Backspace 清除。題目內建不可移動的「已知格」。</div>
+  </main>
+
+  <!-- floating 3x3 image picker -->
+  <div id="picker" class="picker hidden" role="dialog" aria-label="選擇圖像">
+    <!-- picks injected by JS -->
+  </div>
+
+<script>
+(() => {
+  // ======= IMAGES：預設用彩色數字圓形；若 /images/1.png~9.png 存在會自動載入 =======
+  const numberSVG = (n, bg) => `data:image/svg+xml;utf8,${encodeURIComponent(`
+    <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'>
+      <defs>
+        <filter id='s' x='-20%' y='-20%' width='140%' height='140%'>
+          <feDropShadow dx='0' dy='6' stdDeviation='6' flood-opacity='.18'/>
+        </filter>
+      </defs>
+      <circle cx='100' cy='100' r='82' fill='${bg}' filter='url(%23s)'/>
+      <text x='50%' y='54%' text-anchor='middle' dominant-baseline='middle' font-size='120' font-family='system-ui, sans-serif' fill='white' font-weight='800'>${n}</text>
+    </svg>`)}`;
+  const demoBG = ['#78a8ff','#ffa3a3','#ffc658','#9fe87f','#b996ff','#ff86d3','#7ad8ff','#ffb36a','#83e6d6'];
+  let IMAGES = Array.from({length:9}, (_,i)=> numberSVG(i+1, demoBG[i]));
+  async function autoLoadFromImagesFolder(){
+    try{
+      const loaders = Array.from({length:9}, (_,i)=> fetch(`images/${i+1}.png`).then(r=> r.ok? r.blob(): Promise.reject()).then(b=> new Promise(res=>{const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(b);})));    
+      IMAGES = await Promise.all(loaders);
+    }catch(e){ /* 保持數字 SVG 占位 */ }
+  }
+
+  // ======= 內建 Sudoku 題目與解答（Wikipedia 經典例） =======
+  const SOLVED = [
+    5,3,4,6,7,8,9,1,2,
+    6,7,2,1,9,5,3,4,8,
+    1,9,8,3,4,2,5,6,7,
+    8,5,9,7,6,1,4,2,3,
+    4,2,6,8,5,3,7,9,1,
+    7,1,3,9,2,4,8,5,6,
+    9,6,1,5,3,7,2,8,4,
+    2,8,7,4,1,9,6,3,5,
+    3,4,5,2,8,6,1,7,9,
+  ];
+
+  // 0 代表空白，其他為題目已知數（不可動）
+  const PUZZLE = [
+    5,3,0,0,7,0,0,0,0,
+    6,0,0,1,9,5,0,0,0,
+    0,9,8,0,0,0,0,6,0,
+    8,0,0,0,6,0,0,0,3,
+    4,0,0,8,0,3,0,0,1,
+    7,0,0,0,2,0,0,0,6,
+    0,6,0,0,0,0,2,8,0,
+    0,0,0,4,1,9,0,0,5,
+    0,0,0,0,8,0,0,7,9,
+  ];
+
+  // ======= 狀態 =======
+  const boardEl = document.getElementById('board');
+  const picker = document.getElementById('picker');
+  const size = 9;
+  const state = {cells: PUZZLE.slice(), given: new Set(), selectedIndex: -1};
+  PUZZLE.forEach((v,i)=>{ if (v>0) state.given.add(i); });
+
+  // ======= UI：建立棋盤 =======
+  function buildBoard(){
+    boardEl.innerHTML = '';
+    for (let r=0; r<size; r++){
+      for (let c=0; c<size; c++){
+        const i = r*size + c;
+        const cell = document.createElement('div');
+        cell.className = 'cell' + ((Math.floor(r/3)+Math.floor(c/3))%2? ' alt':'');
+        if ((c+1)%3===0) cell.classList.add('thick-right');
+        if ((r+1)%3===0) cell.classList.add('thick-bottom');
+        cell.dataset.index = i;
+        cell.addEventListener('click', onCellClick);
+        cell.addEventListener('dblclick', ()=> tryPlace(i,0));
+        boardEl.appendChild(cell);
+      }
+    }
+    render();
+  }
+
+  // ======= 3x3 選擇器 =======
+  function buildPicker(){
+    picker.innerHTML = '';
+    for (let n=1; n<=9; n++){
+      const b = document.createElement('button'); b.type='button'; b.className='pick'; b.dataset.value=n; b.title=String(n);
+      const img = document.createElement('img'); img.src = IMAGES[n-1]; img.alt = `選 ${n}`; b.appendChild(img);
+      b.addEventListener('click', ()=>{ if (state.selectedIndex>=0) { tryPlace(state.selectedIndex, n); hidePicker(); }});
+      picker.appendChild(b);
+    }
+  }
+  function showPickerForCell(cell){
+    const rect = cell.getBoundingClientRect();
+    const top = window.scrollY + rect.bottom + 8;
+    const left = window.scrollX + rect.left;
+    picker.style.top = `${top}px`; picker.style.left = `${left}px`;
+    picker.classList.remove('hidden');
+  }
+  function hidePicker(){ picker.classList.add('hidden'); state.selectedIndex = -1; }
+  document.addEventListener('click', (e)=>{ if (!picker.contains(e.target) && !e.target.classList.contains('cell')) hidePicker(); });
+
+  // ======= 事件 =======
+  function onCellClick(e){
+    const i = Number(e.currentTarget.dataset.index);
+    if (state.given.has(i)) return; // 鎖定
+    state.selectedIndex = i;
+    showPickerForCell(e.currentTarget);
+  }
+
+  function tryPlace(i, v){
+    if (state.given.has(i)) return;
+    state.cells[i] = v; // 0 代表清空
+    render();
+  }
+
+  // 鍵盤輸入
+  document.addEventListener('keydown', (e)=>{
+    if (state.selectedIndex<0) return;
+    if (e.key>='1' && e.key<='9'){
+      tryPlace(state.selectedIndex, Number(e.key));
+      hidePicker();
+    } else if (e.key==='Backspace' || e.key==='Delete' || e.key==='0'){
+      tryPlace(state.selectedIndex, 0); hidePicker();
+    }
+  });
+
+  // ======= 繪製 =======
+  function render(){
+    boardEl.querySelectorAll('.cell').forEach((cell)=>{
+      cell.classList.remove('given','error','ok');
+      cell.innerHTML = '';
+      const i = Number(cell.dataset.index);
+      const v = state.cells[i];
+      if (v>0){
+        const img = document.createElement('img');
+        img.src = IMAGES[v-1]; img.alt = `值 ${v}`; cell.appendChild(img);
+      }
+      if (state.given.has(i)) cell.classList.add('given');
+    });
+  }
+
+  // ======= 驗證 =======
+  function validate(){
+    // 標記重複（行/列/九宮格）
+    const errors = new Set();
+    const rows = Array.from({length:9}, ()=> new Map());
+    const cols = Array.from({length:9}, ()=> new Map());
+    const box = Array.from({length:9}, ()=> new Map());
+    for (let i=0;i<81;i++){
+      const v = state.cells[i]; if (!v) continue;
+      const r = Math.floor(i/9), c = i%9, b = Math.floor(r/3)*3 + Math.floor(c/3);
+      const touch = (m)=>{ if (m.has(v)) { errors.add(i); errors.add(m.get(v)); } else m.set(v, i); };
+      touch(rows[r]); touch(cols[c]); touch(box[b]);
+    }
+    // 如果全部填滿，額外用解答比對
+    const filled = state.cells.every(v=> v>0);
+    if (filled){
+      for (let i=0;i<81;i++){ if (state.cells[i] !== SOLVED[i]) errors.add(i); }
+    }
+    boardEl.querySelectorAll('.cell').forEach((cell)=>{
+      const i = Number(cell.dataset.index);
+      cell.classList.toggle('error', errors.has(i));
+      cell.classList.toggle('ok', !errors.has(i) && state.cells[i]>0);
+    });
+    if (filled && errors.size===0){ alert('恭喜完成！'); }
+  }
+
+  // ======= 控制鈕 =======
+  document.getElementById('btnCheck').onclick = validate;
+  document.getElementById('btnReset').onclick = ()=>{ state.cells = PUZZLE.slice(); render(); };
+
+  // ======= 啟動 =======
+  (async () => {
+    await autoLoadFromImagesFolder();
+    buildBoard();
+    buildPicker();
+  })();
+})();
+</script>
+</body>
+</html>
