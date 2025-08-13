@@ -17,7 +17,7 @@
     *{box-sizing:border-box}
     body{margin:0;font-family: ui-sans-serif, system-ui, -apple-system, "Noto Sans TC", "PingFang TC", Arial, sans-serif; background:var(--bg); color:var(--ink);}    
     header{padding:14px 16px; display:flex; gap:12px; align-items:center; justify-content:space-between; border-bottom:1px solid #f0e3ea; background:#fff; position:sticky; top:0; z-index:2}
-    header .title{font-weight:700; letter-spacing:.2px}
+    header .title{font-weight:700; letter-spacing:.2px; color: var(--subgrid)}
     header .title small{display:block; font-weight:500; color:var(--muted)}
     .controls{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
     .pill{font-size:12px; padding:6px 8px; border-radius:999px; border:1px solid #e8d3df; color:#6b6b77; background:#fff}
@@ -27,10 +27,10 @@
 
     main{max-width:720px; margin:0 auto; padding:18px}
 
-    /* Board */
+    /* Board wrapper & base */
     .board-wrap{background:#fff;border:2px solid #f0e3ea; border-radius:18px; padding:16px; box-shadow:var(--shadow)}
-    .board{display:grid; grid-template-columns:repeat(9, minmax(34px, 1fr)); gap:0; border:2.5px solid var(--subgrid); border-radius:12px; overflow:hidden}
-    .cell{border:1.5px solid var(--grid); aspect-ratio:1; background:var(--cell); display:flex; align-items:center; justify-content:center; position:relative; user-select:none}
+    .board{border:2.5px solid var(--subgrid); border-radius:12px; overflow:hidden}
+    .cell{border:1.5px solid var(--grid); background:var(--cell); display:flex; align-items:center; justify-content:center; position:relative; user-select:none}
     .cell.alt{background:var(--cell-alt)}
     .cell.given{background:var(--given)}
     .cell.error{background:var(--error)}
@@ -40,21 +40,16 @@
     .cell.thick-right{border-right:2.5px solid var(--subgrid)}
     .cell.thick-bottom{border-bottom:2.5px solid var(--subgrid)}
 
-    /* Picker */
-    .picker{position:absolute; z-index:5; display:grid; grid-template-columns:repeat(3,56px); gap:8px; padding:10px; background:#fff; border:2px solid #f0e3ea; border-radius:14px; box-shadow:var(--shadow)}
-    .pick{width:56px; height:56px; display:flex; align-items:center; justify-content:center; border:1.5px dashed #e4c1d4; border-radius:12px; cursor:pointer; background:var(--cell-alt)}
-    .pick img{max-width:80%; max-height:80%}
+    /* Picker (enlarged) */
+    .picker{position:absolute; z-index:5; display:grid; grid-template-columns:repeat(3,72px); gap:8px; padding:12px; background:#fff; border:2px solid #f0e3ea; border-radius:14px; box-shadow:var(--shadow)}
+    .pick{width:72px; height:72px; display:flex; align-items:center; justify-content:center; border:1.5px dashed #e4c1d4; border-radius:12px; cursor:pointer; background:var(--cell-alt)}
+    .pick img{max-width:92%; max-height:92%}
     .hidden{display:none}
 
     .hint{margin:10px 4px; color:var(--muted); font-size:12px}
 
     /* Error overlay */
     #err{position:fixed; left:0; right:0; top:0; background:#ffeaea; color:#b00020; padding:10px 14px; border-bottom:2px solid #ffb3b3; font-size:12px; display:none; z-index:99}
-
-    @media (max-width:520px){
-      .picker{grid-template-columns:repeat(3,48px)}
-      .pick{width:48px; height:48px}
-    }
   </style>
 </head>
 <body>
@@ -70,7 +65,9 @@
 
   <main>
     <section class="board-wrap">
-      <div id="board" class="board" aria-label="9x9 board"></div>
+      <!-- 這裡加了行內樣式：強制 9 欄 grid，避免整盤變長條 -->
+      <div id="board" class="board" aria-label="9x9 board"
+           style="display:grid;grid-template-columns:repeat(9,minmax(34px,1fr));gap:0"></div>
     </section>
     <div class="hint">提示：鍵盤 1–9 也可填入；Backspace 清除。題目內建不可移動的「已知格」。</div>
   </main>
@@ -80,61 +77,80 @@
 
 <script>
 'use strict';
-(() => {
-  // ===== Error guard：任何未捕捉錯誤都顯示在頁面最上方，避免只剩外框又沒原因 =====
-  const errBar = document.getElementById('err');
-  window.addEventListener('error', (e)=>{
-    errBar.textContent = `腳本錯誤：${e.message}`; errBar.style.display='block';
+(function(){
+  // ===== Error guard =====
+  var errBar = document.getElementById('err');
+  window.addEventListener('error', function(e){
+    errBar.textContent = '腳本錯誤：' + (e.message || e.error);
+    errBar.style.display='block';
     console.error(e.error || e.message);
   });
 
-  // ===== IMAGES：預設用彩色數字圓形；若 /images/1.png~9.png 存在會自動載入 =====
-  const numberSVG = function(n, bg){
+  // ===== Images =====
+  function numberSVG(n, bg){
     return 'data:image/svg+xml;utf8,' + encodeURIComponent(
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">' +
-      '<defs><filter id="s" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="6" stdDeviation="6" flood-opacity=".18"/></filter></defs>' +
-      '<circle cx="100" cy="100" r="82" fill="'+bg+'" filter="url(#s)"/>' +
-      '<text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" font-size="120" font-family="system-ui, sans-serif" fill="white" font-weight="800">'+n+'</text>' +
+      '<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 200 200\">' +
+      '<defs><filter id=\"s\" x=\"-20%\" y=\"-20%\" width=\"140%\" height=\"140%\"><feDropShadow dx=\"0\" dy=\"6\" stdDeviation=\"6\" flood-opacity=\".18\"/></filter></defs>' +
+      '<circle cx=\"100\" cy=\"100\" r=\"82\" fill=\"'+bg+'\" filter=\"url(#s)\"/>' +
+      '<text x=\"50%\" y=\"54%\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-size=\"120\" font-family=\"system-ui, sans-serif\" fill=\"white\" font-weight=\"800\">'+n+'</text>' +
       '</svg>'
     );
-  };
-  const demoBG = ['#78a8ff','#ffa3a3','#ffc658','#9fe87f','#b996ff','#ff86d3','#7ad8ff','#ffb36a','#83e6d6'];
-  let IMAGES = Array.from({length:9}, function(_,i){ return numberSVG(i+1, demoBG[i]); });
-  async function autoLoadFromImagesFolder(){
-    const loaders = Array.from({length:9}, function(_,i){
-      return fetch('images/'+(i+1)+'.png', {method:'GET'})
-        .then(function(r){ return r.ok ? r.blob() : Promise.reject('no'); })
-        .then(function(b){ return new Promise(function(res){ var fr=new FileReader(); fr.onload=function(){res(fr.result)}; fr.readAsDataURL(b); }); });
-    });
+  }
+  var demoBG = ['#78a8ff','#ffa3a3','#ffc658','#9fe87f','#b996ff','#ff86d3','#7ad8ff','#ffb36a','#83e6d6'];
+  var IMAGES = [];
+  for (var d=0; d<9; d++) IMAGES.push(numberSVG(d+1, demoBG[d]));
+  function autoLoadFromImagesFolder(){
+    var loaders = [];
+    for (var i=0; i<9; i++){
+      loaders.push(
+        fetch('images/'+(i+1)+'.png', {method:'GET'})
+          .then(function(r){ return r.ok ? r.blob() : Promise.reject('no'); })
+          .then(function(b){ return new Promise(function(res){ var fr=new FileReader(); fr.onload=function(){res(fr.result)}; fr.readAsDataURL(b); }); })
+      );
+    }
     return Promise.allSettled(loaders).then(function(results){
       var ok = results.every(function(r){ return r.status==='fulfilled'; });
       if (ok) IMAGES = results.map(function(r){ return r.value; });
     });
   }
 
-  // ===== 題目＆解答 =====
-  const SOLVED = [
+  // ===== Puzzle =====
+  var SOLVED = [
     5,3,4,6,7,8,9,1,2, 6,7,2,1,9,5,3,4,8, 1,9,8,3,4,2,5,6,7,
     8,5,9,7,6,1,4,2,3, 4,2,6,8,5,3,7,9,1, 7,1,3,9,2,4,8,5,6,
     9,6,1,5,3,7,2,8,4, 2,8,7,4,1,9,6,3,5, 3,4,5,2,8,6,1,7,9
   ];
-  const PUZZLE = [
+  var PUZZLE = [
     5,3,0,0,7,0,0,0,0, 6,0,0,1,9,5,0,0,0, 0,9,8,0,0,0,0,6,0,
     8,0,0,0,6,0,0,0,3, 4,0,0,8,0,3,0,0,1, 7,0,0,0,2,0,0,0,6,
     0,6,0,0,0,0,2,8,0, 0,0,0,4,1,9,0,0,5, 0,0,0,0,8,0,0,7,9
   ];
 
-  // ===== 狀態 =====
-  const boardEl = document.getElementById('board');
-  const picker = document.getElementById('picker');
-  const statusEl = document.getElementById('status');
-  const size = 9;
-  const state = {cells: PUZZLE.slice(), given: new Set(), selectedIndex: -1, highlight: null};
-  PUZZLE.forEach(function(v,i){ if (v>0) state.given.add(i); });
+  // ===== State =====
+  var boardEl = document.getElementById('board');
+  var picker = document.getElementById('picker');
+  var statusEl = document.getElementById('status');
+  var size = 9;
+  var state = {cells: PUZZLE.slice(), given: new Set(), selectedIndex: -1, highlight: null};
+  for (var gi=0; gi<PUZZLE.length; gi++){ if (PUZZLE[gi]>0) state.given.add(gi); }
 
-  // ===== UI：棋盤 =====
+  // ===== Square sizing (no aspect-ratio) =====
+  function squareUp(){
+    var cell = boardEl.querySelector('.cell');
+    if(!cell){ requestAnimationFrame(squareUp); return; }
+    var w = cell.clientWidth;
+    if(w<=0){ requestAnimationFrame(squareUp); return; }
+    boardEl.querySelectorAll('.cell').forEach(function(c){ c.style.height = w + 'px'; });
+  }
+  addEventListener('resize', squareUp);
+
+  // ===== Board =====
   function buildBoard(){
     boardEl.innerHTML = '';
+    // 強制 9 欄 grid（雙保險：行內樣式 + 這裡再寫一次）
+    boardEl.style.display = 'grid';
+    boardEl.style.gridTemplateColumns = 'repeat(9, minmax(34px, 1fr))';
+    boardEl.style.gap = '0px';
     for (var r=0; r<size; r++){
       for (var c=0; c<size; c++){
         var i = r*size + c;
@@ -145,29 +161,31 @@
         if ((r+1)%3===0) cell.classList.add('thick-bottom');
         cell.dataset.index = i;
         cell.addEventListener('click', onCellClick);
-        cell.addEventListener('dblclick', function(ii){ return function(){ tryPlace(ii,0); };}(i));
+        (function(ii){ cell.addEventListener('dblclick', function(){ tryPlace(ii,0); }); })(i);
         boardEl.appendChild(cell);
       }
     }
     render();
+    squareUp();
+    statusEl.textContent = '就緒';
   }
 
-  // ===== 3x3 選擇器 =====
+  // ===== Picker =====
   function buildPicker(){
     picker.innerHTML = '';
     picker.addEventListener('click', function(e){ e.stopPropagation(); });
     for (var n=1; n<=9; n++){
-      var b = document.createElement('button');
-      b.type='button'; b.className='pick'; b.dataset.value=n; b.title=String(n);
-      var img = document.createElement('img'); img.src = IMAGES[n-1]; img.alt = '選 '+n; b.appendChild(img);
-      b.addEventListener('click', (function(nLocal){
-        return function(e){
+      (function(nLocal){
+        var b = document.createElement('button');
+        b.type='button'; b.className='pick'; b.dataset.value=nLocal; b.title=String(nLocal);
+        var img = document.createElement('img'); img.src = IMAGES[nLocal-1]; img.alt = '選 '+nLocal; b.appendChild(img);
+        b.addEventListener('click', function(e){
           e.stopPropagation();
           var i = state.selectedIndex; if (i>=0) tryPlace(i, nLocal);
           hidePicker(); setHighlight(nLocal);
-        };
-      })(n));
-      picker.appendChild(b);
+        });
+        picker.appendChild(b);
+      })(n);
     }
   }
   function showPickerForCell(cell){
@@ -180,12 +198,12 @@
   function hidePicker(){ picker.classList.add('hidden'); state.selectedIndex = -1; }
   document.addEventListener('click', function(e){ if (!picker.contains(e.target) && !e.target.classList.contains('cell')) hidePicker(); });
 
-  // ===== 事件 =====
+  // ===== Events =====
   function onCellClick(e){
     var i = Number(e.currentTarget.dataset.index);
     var v = state.cells[i];
     setHighlight(v);
-    if (state.given.has(i)) return; // 題目鎖定
+    if (state.given.has(i)) return;
     state.selectedIndex = i;
     showPickerForCell(e.currentTarget);
   }
@@ -197,27 +215,25 @@
     else if (e.key==='Escape'){ hidePicker(); setHighlight(null); }
   });
 
-  // ===== 高亮同圖案 =====
+  // ===== Highlight =====
   function setHighlight(v){ state.highlight = (v && v>0) ? v : null; render(); }
 
-  // ===== 繪製 =====
+  // ===== Render =====
   function render(){
     var cells = boardEl.querySelectorAll('.cell');
     for (var i=0; i<cells.length; i++){
       var cell = cells[i];
       var v = state.cells[i];
-      // 清內容 & 移除狀態 class
       cell.classList.remove('given','error','ok','hl');
       cell.innerHTML = '';
-      // 圖像
       if (v>0){ var img = document.createElement('img'); img.src = IMAGES[v-1]; img.alt = '值 '+v; cell.appendChild(img); }
-      // 標示
       if (state.given.has(i)) cell.classList.add('given');
       if (state.highlight && v===state.highlight) cell.classList.add('hl');
     }
+    squareUp();
   }
 
-  // ===== 驗證 =====
+  // ===== Validate =====
   function validate(){
     var errors = new Set();
     var rows = Array.from({length:9}, function(){ return new Map(); });
@@ -238,21 +254,38 @@
     if (filled && errors.size===0){ alert('恭喜完成！'); }
   }
 
-  // ===== 控制鈕 =====
+  // ===== Controls =====
   document.getElementById('btnCheck').onclick = validate;
   document.getElementById('btnReset').onclick = function(){ setHighlight(null); state.cells = PUZZLE.slice(); render(); };
 
-  // ===== 啟動 =====
-  (async function () {
-    try{
-      await autoLoadFromImagesFolder();
-      buildBoard();
-      buildPicker();
-      statusEl.textContent = '就緒';
-    }catch(ex){
-      statusEl.textContent = '初始化失敗';
-      errBar.textContent = '初始化失敗：' + (ex.message||ex);
-      errBar.style.display='block';
+  // ===== Init =====
+  try {
+    buildBoard();
+    buildPicker();
+    autoLoadFromImagesFolder().then(function(){ buildPicker(); render(); });
+  } catch(ex) {
+    statusEl.textContent = '初始化失敗';
+    errBar.textContent = '初始化失敗：' + (ex.message||ex);
+    errBar.style.display='block';
+  }
+})();
+</script>
+
+<!-- Favicon auto-check（favicon.png / Favicon.png / favicon.ico） + 破快取 -->
+<script>
+(function(){
+  var rels=['icon','shortcut icon','apple-touch-icon'];
+  function setFav(href){
+    for(var i=0;i<rels.length;i++){
+      var link=document.querySelector('link[rel="'+rels[i]+'"]');
+      if(!link){ link=document.createElement('link'); link.rel=rels[i]; document.head.appendChild(link); }
+      link.href=href;
+    }
+  }
+  var candidates=['favicon.png','Favicon.png','favicon.ico'];
+  (async function(){
+    for(var i=0;i<candidates.length;i++){
+      try{ var r=await fetch(candidates[i],{method:'HEAD',cache:'no-store'}); if(r.ok){ setFav(candidates[i]+'?v='+(Date.now())); return; } }catch(e){}
     }
   })();
 })();
