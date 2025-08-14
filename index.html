@@ -140,6 +140,8 @@
   }
   var LANG = detectLang();
   var T = I18N[LANG] || I18N['zh'];
+  // 及時重複檢查用的狀態字串（若未定義則給預設）
+  if (!('conflict' in T)) { T.conflict = (LANG==='zh' ? '有重複' : 'Conflicts'); }
   function applyI18N(){
     document.getElementById('subtitle').textContent = T.subtitle;
     document.getElementById('status').textContent = T.ready;
@@ -345,11 +347,38 @@
   function render(){
     var cells = boardEl.querySelectorAll('.cell');
     for (var i=0; i<cells.length; i++){
-      var cell = cells[i]; var v = state.cells[i]; cell.classList.remove('given','error','ok','hl'); cell.innerHTML = '';
-      if (v>0){ var img = document.createElement('img'); img.src = IMAGES[v-1]; img.alt = T.altVal(v); cell.appendChild(img); }
+      var cell = cells[i];
+      var v = state.cells[i];
+      cell.classList.remove('given','error','ok','hl');
+      cell.innerHTML = '';
+      if (v>0){
+        var img = document.createElement('img');
+        img.src = IMAGES[v-1];
+        img.alt = T.altVal(v);
+        cell.appendChild(img);
+      }
       if (state.given.has(i)) cell.classList.add('given');
       if (state.highlight && v===state.highlight) cell.classList.add('hl');
     }
+    // —— 即時檢查：行 / 列 / 3x3 宮 是否重複 ——
+    var errors = new Set();
+    var rows = Array.from({length:9}, function(){ return new Map(); });
+    var cols = Array.from({length:9}, function(){ return new Map(); });
+    var box  = Array.from({length:9}, function(){ return new Map(); });
+    for (var i=0;i<81;i++){
+      var v = state.cells[i];
+      if (!v) continue;
+      var r = Math.floor(i/9), c = i%9, b = Math.floor(r/3)*3 + Math.floor(c/3);
+      var touch = function(m){
+        if (m.has(v)) { errors.add(i); errors.add(m.get(v)); }
+        else m.set(v, i);
+      };
+      touch(rows[r]); touch(cols[c]); touch(box[b]);
+    }
+    boardEl.querySelectorAll('.cell').forEach(function(cell, i){
+      cell.classList.toggle('error', errors.has(i));
+    });
+    statusEl.textContent = errors.size>0 ? T.conflict : T.ready;
     squareUp();
   }
 
