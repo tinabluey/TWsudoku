@@ -1,106 +1,396 @@
-334
-335
-336
-337
-338
-339
-340
-341
-342
-343
-344
-345
-346
-347
-348
-349
-350
-351
-352
-353
-354
-355
-356
-357
-358
-359
-360
-361
-362
-363
-364
-365
-366
-367
-368
-369
-370
-371
-372
-373
-374
-375
-376
-377
-378
-379
-380
-381
-382
-383
-384
-385
-386
-387
-388
-389
-390
-391
-392
-393
-394
-395
-396
-397
-398
-399
-400
-401
-402
-403
-404
-405
-406
-407
-408
-409
-410
-411
-412
-413
-414
-415
-416
-417
-418
-419
-420
-421
-422
-423
-424
-425
-426
-427
-428
-429
-430
-431
-432
-433
-434
-435
 <!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TWZOO Sudoku</title>
+  <meta name="theme-color" content="#ffffff" />
+  <link rel="icon" href="favicon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="favicon.png" />
+  <style>
+    :root{
+      --bg:#fffafc; --ink:#2d2a32; --muted:#8b8b99; --brand:#6aa5ff; --accent:#5ea4ff;
+      --cell:#fff; --cell-alt:#fff3f8; --given:#f1f5ff; --error:#ffe2e2; --ok:#e7ffe7;
+      --grid:#f3b3cc; --subgrid:#e784a6; --shadow: 0 10px 30px rgba(0,0,0,.06);
+    }
+    :root{ --pink:#E784A6; --apricot:#fac796; }
+    *{box-sizing:border-box}
+    html,body{margin:0; height:100%; background:var(--bg); color:var(--ink); font-family: ui-sans-serif, system-ui, -apple-system, "Noto Sans TC", "PingFang TC", Arial, sans-serif;}
+    header{
+      padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 16px;
+      border-bottom:1px solid #f0e3ea; background:#fff; position:sticky; top:0; z-index:2;
+      will-change: transform;
+    }
+    @media (max-width: 640px){ header{ position: static; } }
+    .head{display:flex; flex-direction:column; gap:8px; align-items:center; text-align:center}
+    .title{font-weight:700; letter-spacing:.2px; color: var(--subgrid); font-size:22px}
+    .subtitle{color:var(--muted); font-weight:500; font-size:13px}
+    .actions{display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:center}
+    .pill{font-size:12px; padding:6px 8px; border-radius:999px; border:1px solid #e8d3df; color:#6b6b77; background:#fff}
+    button{border:1.5px solid #e8d3df; background:#fff; padding:9px 12px; border-radius:12px; cursor:pointer; font-weight:600}
+    button:hover{background:#fff6fb}
+    .primary{background:var(--brand); color:#fff; border-color:var(--brand)}
+
+    main{max-width:1100px; margin:0 auto; padding:16px; display:flex; flex-direction:column; align-items:center; gap:12px;}
+
+    /* 棋盤 */
+    .board-wrap{background:#fff;border:2px solid #f0e3ea; border-radius:18px; padding:16px; box-shadow:var(--shadow); display:inline-block}
+    .board{border:2.5px solid var(--subgrid); border-radius:12px; overflow:hidden}
+    .cell{border:1.5px solid var(--grid); background:var(--cell); display:flex; align-items:center; justify-content:center; position:relative; user-select:none}
+    .cell.alt{background:var(--cell-alt)}
+    .cell.given{background:var(--given)}
+    .cell.error{background:var(--error); box-shadow:0 0 0 3px #ef4444 inset;}
+    .cell.error.hl{box-shadow:0 0 0 3px #ef4444 inset, 0 0 0 1.5px var(--accent) inset;} 
+    .cell.ok{background:var(--ok)}
+    .cell.hl{box-shadow:0 0 0 3px var(--accent) inset; position:relative}
+    .cell img{max-width:80%; max-height:80%; pointer-events:none}
+    .cell.thick-right{border-right:2.5px solid var(--subgrid)}
+    .cell.thick-bottom{border-bottom:2.5px solid var(--subgrid)}
+
+    /* 浮動選單（3x3） */
+    .picker{position:absolute; z-index:5; display:grid; grid-template-columns:repeat(3,72px); gap:8px; padding:12px; background:#fff; border:2px solid #f0e3ea; border-radius:14px; box-shadow:var(--shadow)}
+    .pick{width:72px; height:72px; display:flex; align-items:center; justify-content:center; border:1.5px dashed #e4c1d4; border-radius:12px; cursor:pointer; background:var(--cell-alt)}
+    .pick img{max-width:92%; max-height:92%}
+    .hidden{display:none}
+
+    /* 狀態在棋盤下方 */
+    .below{display:flex; justify-content:center; width:100%}
+    .below .pill{background:#fff;}
+
+    .progress{margin:2px 0 0; text-align:center; color:var(--muted); font-size:13px; width:100%}
+    .version{margin:4px 0 0; text-align:center; color:var(--muted); font-size:12px; width:100%}
+
+    /* 題目選擇器（1–9） */
+    .puzzle-picker{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:4px}
+    .pcell{width:44px;height:44px;border-radius:999px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;line-height:1;border:2px solid transparent}
+    .pcell.idle{border-color:var(--pink); color:var(--pink); background:#fff}
+    .pcell.progress{background:var(--pink); color:#fff}
+    .pcell.done{background:var(--apricot); color:#fff}
+    .pcell.current{box-shadow:0 0 0 2px var(--apricot)}
+
+    /* Footer */
+    footer{margin:8px 0 24px; text-align:center; color:#6b6b77; font-size:14px; width:100%}
+
+    /* Error overlay */
+    #err{position:fixed; left:0; right:0; top:0; background:#ffeaea; color:#b00020; padding:10px 14px; border-bottom:2px solid #ffb3b3; font-size:12px; display:none; z-index:99}
+  </style>
+</head>
+<body>
+  <div id="err"></div>
+  <header>
+    <div class="head">
+      <div class="title">TWZOO Sudoku</div>
+      <div class="subtitle" id="subtitle">點選空格會跳出選單、雙擊格子清除</div>
+      <div class="actions">
+        <button id="btnReset">重製題目</button>
+      </div>
+      <div id="puzzlePicker" class="puzzle-picker"></div>
+    </div>
+  </header>
+
+  <main>
+    <section class="board-wrap">
+      <div id="board" class="board" aria-label="9x9 board"
+           style="display:grid;grid-template-columns:repeat(9,1fr);gap:0;width:min(96vmin, calc(100vw - 24px), 960px)"></div>
+    </section>
+
+    <div class="below"><span id="status" class="pill">就緒</span></div>
+    <div class="progress" id="progress">進度 0/9</div>
+    <div class="version" id="version">Version 1.07</div>
+  </main>
+
+  <footer id="footer">Design by Tinabluey</footer>
+
+  <div id="picker" class="picker hidden" role="dialog" aria-label="選擇圖像"></div>
+
+<script>
+'use strict';
+(function(){
+  // ===== Error guard =====
+  var errBar = document.getElementById('err');
+  window.addEventListener('error', function(e){
+    errBar.textContent = '腳本錯誤：' + (e.message || e.error);
+    errBar.style.display='block';
+    console.error(e.error || e.message);
+  });
+
+  // ===== i18n =====
+  var I18N = {
+    'zh': {
+      subtitle: '點選空格會跳出選單、雙擊格子清除',
+      ready: '就緒',
+      reset: '重製題目',
+      congrats: '恭喜完成！',
+      altPick: function(n){ return '選 ' + n; },
+      altVal: function(n){ return '值 ' + n; },
+      footer: 'Design by Tinabluey'
+    },
+    'en': {
+      subtitle: 'Tap the empty box to enter, double tap to clear',
+      ready: 'Ready',
+      reset: 'Reset puzzle',
+      congrats: 'Congrats!',
+      altPick: function(n){ return 'Pick ' + n; },
+      altVal: function(n){ return 'Value ' + n; },
+      footer: 'Design by Tinabluey'
+    }
+  };
+  function detectLang(){
+    var langs = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || '']).map(function(x){ return (x||'').toLowerCase(); });
+    for (var i=0;i<langs.length;i++){
+      var l = langs[i];
+      if (l.startsWith('zh')) return 'zh';
+      if (l.startsWith('en')) return 'en';
+    }
+    return 'zh';
+  }
+  var LANG = detectLang();
+  var T = I18N[LANG] || I18N['zh'];
+  if (!('conflict' in T)) { T.conflict = (LANG==='zh' ? '有重複' : 'Conflicts'); }
+  function applyI18N(){
+    document.getElementById('subtitle').textContent = T.subtitle;
+    document.getElementById('status').textContent = T.ready;
+    document.getElementById('btnReset').textContent = T.reset;
+    document.getElementById('footer').textContent = T.footer;
+  }
+  applyI18N();
+
+  // ===== 內建數字圖像（若 /images/1.png~9.png 存在會自動改用） =====
+  function numberSVG(n, bg){
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">' +
+      '<defs><filter id="s" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="6" stdDeviation="6" flood-opacity=".18"/></filter></defs>' +
+      '<circle cx="100" cy="100" r="82" fill="'+bg+'" filter="url(#s)"/>' +
+      '<text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" font-size="120" font-family="system-ui, sans-serif" fill="white" font-weight="800">'+n+'</text>' +
+      '</svg>'
+    );
+  }
+  var demoBG = ['#78a8ff','#ffa3a3','#ffc658','#9fe87f','#b996ff','#ff86d3','#7ad8ff','#ffb36a','#83e6d6'];
+  var IMAGES = [];
+  for (var d=0; d<9; d++) IMAGES.push(numberSVG(d+1, demoBG[d]));
+  function autoLoadFromImagesFolder(){
+    var loaders = [];
+    for (var i=0; i<9; i++){
+      loaders.push(
+        fetch('images/'+(i+1)+'.png', {method:'GET'})
+          .then(function(r){ return r.ok ? r.blob() : Promise.reject('no'); })
+          .then(function(b){ return new Promise(function(res){ var fr=new FileReader(); fr.onload=function(){res(fr.result)}; fr.readAsDataURL(b); }); })
+      );
+    }
+    return Promise.allSettled(loaders).then(function(results){
+      var ok = results.every(function(r){ return r.status==='fulfilled'; });
+      if (ok) IMAGES = results.map(function(r){ return r.value; });
+    });
+  }
+
+  // ===== 題庫：位置 + 數字都不同（行/列/區塊置換、轉置、數字重映射） =====
+  var SOLVED1 = [
+    5,3,4,6,7,8,9,1,2, 6,7,2,1,9,5,3,4,8, 1,9,8,3,4,2,5,6,7,
+    8,5,9,7,6,1,4,2,3, 4,2,6,8,5,3,7,9,1, 7,1,3,9,2,4,8,5,6,
+    9,6,1,5,3,7,2,8,4, 2,8,7,4,1,9,6,3,5, 3,4,5,2,8,6,1,7,9
+  ];
+  var PUZZLE1 = [
+    5,3,0,0,7,0,0,0,0, 6,0,0,1,9,5,0,0,0, 0,9,8,0,0,0,0,6,0,
+    8,0,0,0,6,0,0,0,3, 4,0,0,8,0,3,0,0,1, 7,0,0,0,2,0,0,0,6,
+    0,6,0,0,0,0,2,8,0, 0,0,0,4,1,9,0,0,5, 0,0,0,0,8,0,0,7,9
+  ];
+
+  function transpose(arr){
+    var out = new Array(81);
+    for (var r=0;r<9;r++) for (var c=0;c<9;c++){ out[c*9+r] = arr[r*9+c]; }
+    return out;
+  }
+  function permuteRC(arr, rowPerm, colPerm){
+    var out = new Array(81);
+    for (var r2=0;r2<9;r2++){
+      for (var c2=0;c2<9;c2++){
+        var r = rowPerm[r2], c = colPerm[c2];
+        out[r2*9+c2] = arr[r*9+c];
+      }
+    }
+    return out;
+  }
+  function buildRowPerm(bandOrder, rowOrders){
+    var perm=[];
+    for (var bi=0; bi<3; bi++){
+      var band = bandOrder[bi];
+      var within = rowOrders[bi];
+      for (var j=0;j<3;j++) perm.push(band*3 + within[j]);
+    }
+    return perm;
+  }
+  function buildColPerm(stackOrder, colOrders){
+    var perm=[];
+    for (var si=0; si<3; si++){
+      var stack = stackOrder[si];
+      var within = colOrders[si];
+      for (var j=0;j<3;j++) perm.push(stack*3 + within[j]);
+    }
+    return perm;
+  }
+  function mapDigits(arr, shift){
+    if (!shift) return arr.slice();
+    var out = new Array(arr.length);
+    for (var i=0;i<arr.length;i++){
+      var v = arr[i]; out[i] = v ? (((v-1+shift)%9)+1) : 0;
+    }
+    return out;
+  }
+  function applyTransform(puz, sol, t){
+    var p = puz, s = sol;
+    if (t.transpose){ p = transpose(p); s = transpose(s); }
+    var rowPerm = buildRowPerm(t.bandOrder, t.rowOrders);
+    var colPerm = buildColPerm(t.stackOrder, t.colOrders);
+    p = permuteRC(p, rowPerm, colPerm);
+    s = permuteRC(s, rowPerm, colPerm);
+    if (t.shift){ p = mapDigits(p, t.shift); s = mapDigits(s, t.shift); }
+    return {puzzle: p, solved: s};
+  }
+
+  var TRANSFORMS = [
+    {bandOrder:[1,2,0], rowOrders:[[1,2,0],[2,0,1],[0,2,1]], stackOrder:[2,0,1], colOrders:[[2,1,0],[1,0,2],[0,2,1]], transpose:false, shift:1},
+    {bandOrder:[2,0,1], rowOrders:[[2,1,0],[0,2,1],[1,0,2]], stackOrder:[1,0,2], colOrders:[[1,2,0],[0,1,2],[2,0,1]], transpose:true, shift:3},
+    {bandOrder:[0,2,1], rowOrders:[[0,1,2],[2,1,0],[1,2,0]], stackOrder:[0,2,1], colOrders:[[2,0,1],[1,0,2],[0,2,1]], transpose:false, shift:5},
+    {bandOrder:[1,0,2], rowOrders:[[0,2,1],[1,0,2],[2,1,0]], stackOrder:[2,1,0], colOrders:[[1,2,0],[2,0,1],[0,1,2]], transpose:true, shift:7},
+    {bandOrder:[2,1,0], rowOrders:[[1,0,2],[2,1,0],[0,2,1]], stackOrder:[0,1,2], colOrders:[[0,2,1],[2,1,0],[1,0,2]], transpose:false, shift:2},
+    {bandOrder:[0,1,2], rowOrders:[[2,0,1],[0,2,1],[1,0,2]], stackOrder:[1,2,0], colOrders:[[0,1,2],[2,0,1],[1,2,0]], transpose:true, shift:4},
+    {bandOrder:[1,2,0], rowOrders:[[2,0,1],[1,2,0],[0,1,2]], stackOrder:[2,0,1], colOrders:[[1,0,2],[0,2,1],[2,1,0]], transpose:false, shift:6},
+    {bandOrder:[2,0,1], rowOrders:[[0,1,2],[2,0,1],[1,2,0]], stackOrder:[1,0,2], colOrders:[[2,1,0],[1,2,0],[0,1,2]], transpose:false, shift:8},
+    {bandOrder:[0,2,1], rowOrders:[[1,2,0],[0,1,2],[2,0,1]], stackOrder:[0,2,1], colOrders:[[1,0,2],[2,1,0],[0,2,1]], transpose:true, shift:0}
+  ];
+
+  var PUZZLES = TRANSFORMS.map(function(t){ return applyTransform(PUZZLE1, SOLVED1, t); });
+
+  // ===== 題目選擇與進度儲存（localStorage） =====
+  var ST_PREFIX = 'twzoo.v107.puzzles.';
+  function keyFor(idx){ return ST_PREFIX + (idx+1); }
+  function getInitialIndex(){
+    try{
+      var sp = new URLSearchParams(location.search); var p = parseInt(sp.get('p'),10);
+      if (!isNaN(p) && p>=1 && p<=9) return p-1;
+      var m = (location.hash||'').match(/p=(\d+)/); if (m){ var ph=parseInt(m[1],10); if (ph>=1 && ph<=9) return ph-1; }
+      var last = localStorage.getItem('twzoo.v107.last'); if (last!==null){ var li=parseInt(last,10); if (li>=0 && li<9) return li; }
+    }catch(e){}
+    return 0;
+  }
+  function loadSaved(idx){
+    try{ var raw = localStorage.getItem(keyFor(idx)); if(!raw) return null; var obj = JSON.parse(raw); if(!obj||!Array.isArray(obj.cells)||obj.cells.length!==81) return null; return obj; }catch(e){ return null; }
+  }
+  function isSame(a,b){ for (var i=0;i<81;i++){ if (a[i]!==b[i]) return false; } return true; }
+  function inferStatusFor(idx, cells){
+    var base = PUZZLES[idx].puzzle, solved = PUZZLES[idx].solved;
+    if (isSame(cells, base)) return 'empty';
+    var all=true; for (var i=0;i<81;i++){ if(!cells[i]) { all=false; break; } }
+    if (all && isSame(cells, solved)) return 'solved';
+    return 'inprogress';
+  }
+  function saveCurrent(){
+    try{
+      var st = inferStatusFor(puzzleIndex, state.cells);
+      localStorage.setItem(keyFor(puzzleIndex), JSON.stringify({cells: state.cells, status: st}));
+      localStorage.setItem('twzoo.v107.last', String(puzzleIndex));
+    }catch(e){}
+  }
+  function setProgressText(cnt){
+    var el=document.getElementById('progress'); if(!el) return; var label=(LANG==='zh')?'進度':'Progress'; el.textContent = label + ' ' + cnt + '/9';
+  }
+  function buildPuzzleSelector(){
+    var el = document.getElementById('puzzlePicker'); if(!el) return; el.innerHTML='';
+    var solvedCnt=0;
+    for (var idx=0; idx<9; idx++){
+      var btn=document.createElement('button'); btn.type='button'; btn.className='pcell'; btn.textContent=String(idx+1);
+      var data=loadSaved(idx); var st;
+      if (idx===puzzleIndex) st = inferStatusFor(idx, state.cells);
+      else if (data&&data.cells) st = data.status || inferStatusFor(idx, data.cells);
+      else st='empty';
+      if (st==='solved') solvedCnt++;
+      btn.classList.add(st==='empty'?'idle':(st==='inprogress'?'progress':'done'));
+      if (idx===puzzleIndex) btn.classList.add('current');
+      (function(i){ btn.addEventListener('click', function(){ if(i===puzzleIndex) return; saveCurrent(); usePuzzle(i); buildPuzzleSelector(); updateProgress(); }); })(idx);
+      el.appendChild(btn);
+    }
+    setProgressText(solvedCnt);
+  }
+  function updateProgress(){
+    var cnt=0; for (var idx=0; idx<9; idx++){ var st;
+      if (idx===puzzleIndex) st = inferStatusFor(idx, state.cells);
+      else { var d=loadSaved(idx); st = d ? (d.status || inferStatusFor(idx, d.cells)) : 'empty'; }
+      if (st==='solved') cnt++; }
+    setProgressText(cnt);
+  }
+
+  var puzzleIndex = getInitialIndex();
+
+  // ===== 狀態 =====
+  var boardEl = document.getElementById('board');
+  var picker = document.getElementById('picker');
+  var statusEl = document.getElementById('status');
+  var size = 9;
+  var PUZZLE = PUZZLES[puzzleIndex].puzzle.slice();
+  var SOLVED  = PUZZLES[puzzleIndex].solved.slice();
+  var state = {cells: PUZZLE.slice(), given: new Set(), selectedIndex: -1, highlight: null};
+  for (var gi=0; gi<PUZZLE.length; gi++){ if (PUZZLE[gi]>0) state.given.add(gi); }
+
+  function usePuzzle(idx){
+    puzzleIndex = (idx % PUZZLES.length + PUZZLES.length) % PUZZLES.length;
+    PUZZLE = PUZZLES[puzzleIndex].puzzle.slice();
+    SOLVED = PUZZLES[puzzleIndex].solved.slice();
+    var saved = loadSaved(puzzleIndex);
+    state.cells = saved && saved.cells && saved.cells.length===81 ? saved.cells.slice() : PUZZLE.slice();
+    state.given = new Set();
+    for (var i=0;i<PUZZLE.length;i++){ if (PUZZLE[i]>0) state.given.add(i); }
+    state.selectedIndex = -1; state.highlight = null; render();
+  }
+
+  // ===== 正方形維持（盤面與每格） =====
+  function squareUp(){
+    var wBoard = boardEl.clientWidth; if (wBoard>0) boardEl.style.height = wBoard + 'px';
+    var cell = boardEl.querySelector('.cell'); if(!cell){ requestAnimationFrame(squareUp); return; }
+    var w = cell.clientWidth; if(w<=0){ requestAnimationFrame(squareUp); return; }
+    boardEl.querySelectorAll('.cell').forEach(function(c){ c.style.height = w + 'px'; });
+  }
+  addEventListener('resize', squareUp);
+
+  // ===== 建盤 =====
+  function buildBoard(){
+    boardEl.innerHTML = '';
+    boardEl.style.display = 'grid';
+    boardEl.style.gridTemplateColumns = 'repeat(9, 1fr)';
+    boardEl.style.gap = '0px';
+    for (var r=0; r<size; r++){
+      for (var c=0; c<size; c++){
+        var i = r*size + c;
+        var cell = document.createElement('div');
+        cell.classList.add('cell');
+        if ((Math.floor(r/3)+Math.floor(c/3))%2===1) cell.classList.add('alt');
+        if ((c+1)%3===0) cell.classList.add('thick-right');
+        if ((r+1)%3===0) cell.classList.add('thick-bottom');
+        cell.dataset.index = i;
+        cell.addEventListener('click', onCellClick);
+        (function(ii){ cell.addEventListener('dblclick', function(){ tryPlace(ii,0); }); })(i);
+        boardEl.appendChild(cell);
+      }
+    }
+    render(); squareUp(); statusEl.textContent = T.ready;
+  }
+
+  // ===== 選單 =====
+  function buildPicker(){
+    picker.innerHTML = '';
+    picker.addEventListener('click', function(e){ e.stopPropagation(); });
+    for (var n=1; n<=9; n++){
+      (function(nLocal){
+        var b = document.createElement('button');
+        b.type='button'; b.className='pick'; b.dataset.value=nLocal; b.title=String(nLocal);
+        var img = document.createElement('img'); img.src = IMAGES[nLocal-1]; img.alt = T.altPick(nLocal); b.appendChild(img);
+        b.addEventListener('click', function(e){ e.stopPropagation(); var i = state.selectedIndex; if (i>=0) tryPlace(i, nLocal); hidePicker(); setHighlight(nLocal); });
+        picker.appendChild(b);
+      })(n);
+    }
+  }
+  function showPickerForCell(cell){ var rect = cell.getBoundingClientRect(); var top = window.scrollY + rect.bottom + 8; var left = window.scrollX + rect.left; picker.style.top = top+'px'; picker.style.left = left+'px'; picker.classList.remove('hidden'); }
+  function hidePicker(){ picker.classList.add('hidden'); state.selectedIndex = -1; }
+  document.addEventListener('click', function(e){ if (!picker.contains(e.target) && !e.target.classList.contains('cell')) hidePicker(); });
 
   // ===== 互動 =====
   function onCellClick(e){ var i = Number(e.currentTarget.dataset.index); var v = state.cells[i]; setHighlight(v); if (state.given.has(i)) return; state.selectedIndex = i; showPickerForCell(e.currentTarget); }
@@ -108,11 +398,14 @@
     if (!state.given.has(i)) {
       state.cells[i] = v;
       render();
+      saveCurrent();
+      buildPuzzleSelector();
+      updateProgress();
       // 自動檢查：若 81 格皆已填入，立即驗證是否正確
       var filled = state.cells.every(function(x){ return x>0; });
       if (filled) validate();
     }
-  } }
+  }
   document.addEventListener('keydown', function(e){
     if (state.selectedIndex<0) { if (e.key==='Escape') { hidePicker(); setHighlight(null); } return; }
     if (e.key>='1' && e.key<='9'){ var n = Number(e.key); tryPlace(state.selectedIndex, n); hidePicker(); setHighlight(n); }
@@ -162,7 +455,7 @@
     squareUp();
   }
 
-  // ===== 檢查 =====
+  // ===== 檢查（完成時自動觸發） =====
   function validate(){
     var errors = new Set();
     var rows = Array.from({length:9}, function(){ return new Map(); });
@@ -181,13 +474,28 @@
   }
 
   // ===== 控制 =====
-  /* (removed) auto-validate on fill; check button removed */
-  document.getElementById('btnReset').onclick = function(){ setHighlight(null); state.cells = PUZZLE.slice(); render(); };
-  document.getElementById('btnNext').onclick = function(){ hidePicker(); setHighlight(null); usePuzzle((puzzleIndex + 1) % PUZZLES.length); };
+  document.getElementById('btnReset').onclick = function(){
+    setHighlight(null);
+    state.cells = PUZZLE.slice();
+    render();
+    saveCurrent();
+    buildPuzzleSelector();
+    updateProgress();
+  };
 
   // ===== 啟動 =====
-  try { buildBoard(); buildPicker(); autoLoadFromImagesFolder().then(function(){ buildPicker(); render(); }); }
-  catch(ex) { document.getElementById('status').textContent = 'Init Error'; errBar.textContent = '初始化失敗：' + (ex.message||ex); errBar.style.display='block'; }
+  try {
+    buildBoard();
+    buildPicker();
+    usePuzzle(getInitialIndex());
+    buildPuzzleSelector();
+    updateProgress();
+    autoLoadFromImagesFolder().then(function(){ buildPicker(); render(); buildPuzzleSelector(); });
+  } catch(ex) {
+    document.getElementById('status').textContent = 'Init Error';
+    errBar.textContent = '初始化失敗：' + (ex.message||ex);
+    errBar.style.display='block';
+  }
 })();
 </script>
 
