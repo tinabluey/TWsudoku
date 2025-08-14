@@ -39,7 +39,8 @@
     .cell{border:1.5px solid var(--grid); background:var(--cell); display:flex; align-items:center; justify-content:center; position:relative; user-select:none}
     .cell.alt{background:var(--cell-alt)}
     .cell.given{background:var(--given)}
-    .cell.error{background:var(--error)}
+    .cell.error{background:var(--error); box-shadow:0 0 0 3px #ef4444 inset;}
+    .cell.error.hl{box-shadow:0 0 0 3px #ef4444 inset, 0 0 0 1.5px var(--accent) inset;} 
     .cell.ok{background:var(--ok)}
     .cell.hl{box-shadow:0 0 0 3px var(--accent) inset; position:relative}
     .cell img{max-width:80%; max-height:80%; pointer-events:none}
@@ -59,7 +60,7 @@
     .version{margin:4px 0 0; text-align:center; color:var(--muted); font-size:12px; width:100%}
 
     /* Footer */
-    footer{margin:8px 0 24px; text-align:center; color:var(--muted); font-size:12px; width:100%}
+    footer{margin:8px 0 24px; text-align:center; color:var(--muted); font-size:14px; width:100%}
 
     /* Error overlay */
     #err{position:fixed; left:0; right:0; top:0; background:#ffeaea; color:#b00020; padding:10px 14px; border-bottom:2px solid #ffb3b3; font-size:12px; display:none; z-index:99}
