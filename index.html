@@ -9,10 +9,11 @@
   <link rel="apple-touch-icon" href="favicon.png" />
   <style>
     :root{
-      --bg:#fffafc; --ink:#2d2a32; --muted:#8b8b99; --brand:#6aa5ff; --accent:#2563EB;
+      --bg:#fffafc; --ink:#2d2a32; --muted:#8b8b99; --brand:#6aa5ff; --accent:#5ea4ff;
       --cell:#fff; --cell-alt:#fff3f8; --given:#f1f5ff; --error:#ffe2e2; --ok:#e7ffe7;
       --grid:#f3b3cc; --subgrid:#e784a6; --shadow: 0 10px 30px rgba(0,0,0,.06);
     }
+    :root{ --pink:#E784A6; --apricot:#fac796; }
     *{box-sizing:border-box}
     html,body{margin:0; height:100%; background:var(--bg); color:var(--ink); font-family: ui-sans-serif, system-ui, -apple-system, "Noto Sans TC", "PingFang TC", Arial, sans-serif;}
     header{
@@ -20,7 +21,6 @@
       border-bottom:1px solid #f0e3ea; background:#fff; position:sticky; top:0; z-index:2;
       will-change: transform;
     }
-    /* iPhone（小螢幕）避免 sticky 抖動/斷層 */
     @media (max-width: 640px){ header{ position: static; } }
     .head{display:flex; flex-direction:column; gap:8px; align-items:center; text-align:center}
     .title{font-weight:700; letter-spacing:.2px; color: var(--subgrid); font-size:22px}
@@ -47,7 +47,7 @@
     .cell.thick-right{border-right:2.5px solid var(--subgrid)}
     .cell.thick-bottom{border-bottom:2.5px solid var(--subgrid)}
 
-    /* 選單 */
+    /* 浮動選單（3x3） */
     .picker{position:absolute; z-index:5; display:grid; grid-template-columns:repeat(3,72px); gap:8px; padding:12px; background:#fff; border:2px solid #f0e3ea; border-radius:14px; box-shadow:var(--shadow)}
     .pick{width:72px; height:72px; display:flex; align-items:center; justify-content:center; border:1.5px dashed #e4c1d4; border-radius:12px; cursor:pointer; background:var(--cell-alt)}
     .pick img{max-width:92%; max-height:92%}
@@ -57,19 +57,23 @@
     .below{display:flex; justify-content:center; width:100%}
     .below .pill{background:#fff;}
 
+    .progress{margin:2px 0 0; text-align:center; color:var(--muted); font-size:13px; width:100%}
     .version{margin:4px 0 0; text-align:center; color:var(--muted); font-size:12px; width:100%}
 
+    /* 題目選擇器（1–9） */
+    .puzzle-picker{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:4px}
+    .pcell{width:44px;height:44px;border-radius:999px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;line-height:1;border:2px solid transparent}
+    .pcell.idle{border-color:var(--pink); color:var(--pink); background:#fff}
+    .pcell.progress{background:var(--pink); color:#fff}
+    .pcell.done{background:var(--apricot); color:#fff}
+    .pcell.current{box-shadow:0 0 0 2px var(--apricot)}
+
     /* Footer */
-    footer{margin:8px 0 24px; text-align:center; color:var(--muted); font-size:14px; width:100%}
+    footer{margin:8px 0 24px; text-align:center; color:#6b6b77; font-size:14px; width:100%}
 
     /* Error overlay */
     #err{position:fixed; left:0; right:0; top:0; background:#ffeaea; color:#b00020; padding:10px 14px; border-bottom:2px solid #ffb3b3; font-size:12px; display:none; z-index:99}
-    /* 手機/平板縮小 1–9 題目按鈕，桌機維持原尺寸 */
-  .puzzle-picker{gap: clamp(4px, 1.5vw, 8px);}
-  .pcell{width: clamp(28px, 9vw, 44px); height: clamp(28px, 9vw, 44px); font-size: clamp(11px, 3.2vw, 14px);} 
-  /* 避免換行，確保單列（尺寸不足時也會因 clamp 縮小而塞下）*/
-  @media (max-width: 900px){ .puzzle-picker{flex-wrap: nowrap;} }
-</style>
+  </style>
 </head>
 <body>
   <div id="err"></div>
@@ -77,27 +81,26 @@
     <div class="head">
       <div class="title">TWZOO Sudoku</div>
       <div class="subtitle" id="subtitle">點選空格會跳出選單、雙擊格子清除</div>
-      <div class="actions"><button id="btnReset">重製題目</button>
-        <button id="btnNext">下一題</button>
+      <div class="actions">
+        <button id="btnReset">重製題目</button>
       </div>
+      <div id="puzzlePicker" class="puzzle-picker"></div>
     </div>
   </header>
 
   <main>
     <section class="board-wrap">
-      <!-- iPhone 置中＆最大化；JS 會把高度=寬度，確保正方形 -->
       <div id="board" class="board" aria-label="9x9 board"
            style="display:grid;grid-template-columns:repeat(9,1fr);gap:0;width:min(96vmin, calc(100vw - 24px), 960px)"></div>
     </section>
 
-    <!-- 狀態膠囊在棋盤與 footer 之間 -->
     <div class="below"><span id="status" class="pill">就緒</span></div>
+    <div class="progress" id="progress">進度 0/9</div>
     <div class="version" id="version">Version 1.07</div>
   </main>
 
   <footer id="footer">Design by Tinabluey</footer>
 
-  <!-- 浮動 3x3 圖像選單 -->
   <div id="picker" class="picker hidden" role="dialog" aria-label="選擇圖像"></div>
 
 <script>
@@ -116,9 +119,7 @@
     'zh': {
       subtitle: '點選空格會跳出選單、雙擊格子清除',
       ready: '就緒',
-      check: '檢查',
       reset: '重製題目',
-      next: '下一題',
       congrats: '恭喜完成！',
       altPick: function(n){ return '選 ' + n; },
       altVal: function(n){ return '值 ' + n; },
@@ -127,9 +128,7 @@
     'en': {
       subtitle: 'Tap the empty box to enter, double tap to clear',
       ready: 'Ready',
-      check: 'Check',
       reset: 'Reset puzzle',
-      next: 'Next',
       congrats: 'Congrats!',
       altPick: function(n){ return 'Pick ' + n; },
       altVal: function(n){ return 'Value ' + n; },
@@ -147,14 +146,11 @@
   }
   var LANG = detectLang();
   var T = I18N[LANG] || I18N['zh'];
-  // 及時重複檢查用的狀態字串（若未定義則給預設）
   if (!('conflict' in T)) { T.conflict = (LANG==='zh' ? '有重複' : 'Conflicts'); }
   function applyI18N(){
     document.getElementById('subtitle').textContent = T.subtitle;
     document.getElementById('status').textContent = T.ready;
-    // (removed) check button no longer exists
-document.getElementById('btnReset').textContent = T.reset;
-    document.getElementById('btnNext').textContent = T.next;
+    document.getElementById('btnReset').textContent = T.reset;
     document.getElementById('footer').textContent = T.footer;
   }
   applyI18N();
@@ -240,6 +236,16 @@ document.getElementById('btnReset').textContent = T.reset;
     }
     return out;
   }
+  function applyTransform(puz, sol, t){
+    var p = puz, s = sol;
+    if (t.transpose){ p = transpose(p); s = transpose(s); }
+    var rowPerm = buildRowPerm(t.bandOrder, t.rowOrders);
+    var colPerm = buildColPerm(t.stackOrder, t.colOrders);
+    p = permuteRC(p, rowPerm, colPerm);
+    s = permuteRC(s, rowPerm, colPerm);
+    if (t.shift){ p = mapDigits(p, t.shift); s = mapDigits(s, t.shift); }
+    return {puzzle: p, solved: s};
+  }
 
   var TRANSFORMS = [
     {bandOrder:[1,2,0], rowOrders:[[1,2,0],[2,0,1],[0,2,1]], stackOrder:[2,0,1], colOrders:[[2,1,0],[1,0,2],[0,2,1]], transpose:false, shift:1},
@@ -253,19 +259,67 @@ document.getElementById('btnReset').textContent = T.reset;
     {bandOrder:[0,2,1], rowOrders:[[1,2,0],[0,1,2],[2,0,1]], stackOrder:[0,2,1], colOrders:[[1,0,2],[2,1,0],[0,2,1]], transpose:true, shift:0}
   ];
 
-  function applyTransform(puz, sol, t){
-    var p = puz, s = sol;
-    if (t.transpose){ p = transpose(p); s = transpose(s); }
-    var rowPerm = buildRowPerm(t.bandOrder, t.rowOrders);
-    var colPerm = buildColPerm(t.stackOrder, t.colOrders);
-    p = permuteRC(p, rowPerm, colPerm);
-    s = permuteRC(s, rowPerm, colPerm);
-    if (t.shift){ p = mapDigits(p, t.shift); s = mapDigits(s, t.shift); }
-    return {puzzle: p, solved: s};
+  var PUZZLES = TRANSFORMS.map(function(t){ return applyTransform(PUZZLE1, SOLVED1, t); });
+
+  // ===== 題目選擇與進度儲存（localStorage） =====
+  var ST_PREFIX = 'twzoo.v107.puzzles.';
+  function keyFor(idx){ return ST_PREFIX + (idx+1); }
+  function getInitialIndex(){
+    try{
+      var sp = new URLSearchParams(location.search); var p = parseInt(sp.get('p'),10);
+      if (!isNaN(p) && p>=1 && p<=9) return p-1;
+      var m = (location.hash||'').match(/p=(\d+)/); if (m){ var ph=parseInt(m[1],10); if (ph>=1 && ph<=9) return ph-1; }
+      var last = localStorage.getItem('twzoo.v107.last'); if (last!==null){ var li=parseInt(last,10); if (li>=0 && li<9) return li; }
+    }catch(e){}
+    return 0;
+  }
+  function loadSaved(idx){
+    try{ var raw = localStorage.getItem(keyFor(idx)); if(!raw) return null; var obj = JSON.parse(raw); if(!obj||!Array.isArray(obj.cells)||obj.cells.length!==81) return null; return obj; }catch(e){ return null; }
+  }
+  function isSame(a,b){ for (var i=0;i<81;i++){ if (a[i]!==b[i]) return false; } return true; }
+  function inferStatusFor(idx, cells){
+    var base = PUZZLES[idx].puzzle, solved = PUZZLES[idx].solved;
+    if (isSame(cells, base)) return 'empty';
+    var all=true; for (var i=0;i<81;i++){ if(!cells[i]) { all=false; break; } }
+    if (all && isSame(cells, solved)) return 'solved';
+    return 'inprogress';
+  }
+  function saveCurrent(){
+    try{
+      var st = inferStatusFor(puzzleIndex, state.cells);
+      localStorage.setItem(keyFor(puzzleIndex), JSON.stringify({cells: state.cells, status: st}));
+      localStorage.setItem('twzoo.v107.last', String(puzzleIndex));
+    }catch(e){}
+  }
+  function setProgressText(cnt){
+    var el=document.getElementById('progress'); if(!el) return; var label=(LANG==='zh')?'進度':'Progress'; el.textContent = label + ' ' + cnt + '/9';
+  }
+  function buildPuzzleSelector(){
+    var el = document.getElementById('puzzlePicker'); if(!el) return; el.innerHTML='';
+    var solvedCnt=0;
+    for (var idx=0; idx<9; idx++){
+      var btn=document.createElement('button'); btn.type='button'; btn.className='pcell'; btn.textContent=String(idx+1);
+      var data=loadSaved(idx); var st;
+      if (idx===puzzleIndex) st = inferStatusFor(idx, state.cells);
+      else if (data&&data.cells) st = data.status || inferStatusFor(idx, data.cells);
+      else st='empty';
+      if (st==='solved') solvedCnt++;
+      btn.classList.add(st==='empty'?'idle':(st==='inprogress'?'progress':'done'));
+      if (idx===puzzleIndex) btn.classList.add('current');
+      (function(i){ btn.addEventListener('click', function(){ if(i===puzzleIndex) return; saveCurrent(); usePuzzle(i); buildPuzzleSelector(); updateProgress(); }); })(idx);
+      el.appendChild(btn);
+    }
+    setProgressText(solvedCnt);
+  }
+  function updateProgress(){
+    var cnt=0; for (var idx=0; idx<9; idx++){ var st;
+      if (idx===puzzleIndex) st = inferStatusFor(idx, state.cells);
+      else { var d=loadSaved(idx); st = d ? (d.status || inferStatusFor(idx, d.cells)) : 'empty'; }
+      if (st==='solved') cnt++; }
+    setProgressText(cnt);
   }
 
-  var PUZZLES = TRANSFORMS.map(function(t){ return applyTransform(PUZZLE1, SOLVED1, t); });
-  var puzzleIndex = 0;
+  var puzzleIndex = getInitialIndex();
 
   // ===== 狀態 =====
   var boardEl = document.getElementById('board');
@@ -281,7 +335,8 @@ document.getElementById('btnReset').textContent = T.reset;
     puzzleIndex = (idx % PUZZLES.length + PUZZLES.length) % PUZZLES.length;
     PUZZLE = PUZZLES[puzzleIndex].puzzle.slice();
     SOLVED = PUZZLES[puzzleIndex].solved.slice();
-    state.cells = PUZZLE.slice();
+    var saved = loadSaved(puzzleIndex);
+    state.cells = saved && saved.cells && saved.cells.length===81 ? saved.cells.slice() : PUZZLE.slice();
     state.given = new Set();
     for (var i=0;i<PUZZLE.length;i++){ if (PUZZLE[i]>0) state.given.add(i); }
     state.selectedIndex = -1; state.highlight = null; render();
@@ -343,6 +398,9 @@ document.getElementById('btnReset').textContent = T.reset;
     if (!state.given.has(i)) {
       state.cells[i] = v;
       render();
+      saveCurrent();
+      buildPuzzleSelector();
+      updateProgress();
       // 自動檢查：若 81 格皆已填入，立即驗證是否正確
       var filled = state.cells.every(function(x){ return x>0; });
       if (filled) validate();
@@ -397,7 +455,7 @@ document.getElementById('btnReset').textContent = T.reset;
     squareUp();
   }
 
-  // ===== 檢查 =====
+  // ===== 檢查（完成時自動觸發） =====
   function validate(){
     var errors = new Set();
     var rows = Array.from({length:9}, function(){ return new Map(); });
@@ -416,13 +474,28 @@ document.getElementById('btnReset').textContent = T.reset;
   }
 
   // ===== 控制 =====
-  /* (removed) auto-validate on fill; check button removed */
-  document.getElementById('btnReset').onclick = function(){ setHighlight(null); state.cells = PUZZLE.slice(); render(); };
-  document.getElementById('btnNext').onclick = function(){ hidePicker(); setHighlight(null); usePuzzle((puzzleIndex + 1) % PUZZLES.length); };
+  document.getElementById('btnReset').onclick = function(){
+    setHighlight(null);
+    state.cells = PUZZLE.slice();
+    render();
+    saveCurrent();
+    buildPuzzleSelector();
+    updateProgress();
+  };
 
   // ===== 啟動 =====
-  try { buildBoard(); buildPicker(); autoLoadFromImagesFolder().then(function(){ buildPicker(); render(); }); }
-  catch(ex) { document.getElementById('status').textContent = 'Init Error'; errBar.textContent = '初始化失敗：' + (ex.message||ex); errBar.style.display='block'; }
+  try {
+    buildBoard();
+    buildPicker();
+    usePuzzle(getInitialIndex());
+    buildPuzzleSelector();
+    updateProgress();
+    autoLoadFromImagesFolder().then(function(){ buildPicker(); render(); buildPuzzleSelector(); });
+  } catch(ex) {
+    document.getElementById('status').textContent = 'Init Error';
+    errBar.textContent = '初始化失敗：' + (ex.message||ex);
+    errBar.style.display='block';
+  }
 })();
 </script>
 
