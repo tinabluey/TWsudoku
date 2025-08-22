@@ -145,15 +145,19 @@
       footer: 'Design by Tinabluey'
     }
   };
-  function detectLang(){
-    var langs = (navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || '']).map(function(x){ return (x||'').toLowerCase(); });
-    for (var i=0;i<langs.length;i++){
-      var l = langs[i];
-      if (l.startsWith('zh')) return 'zh';
-      if (l.startsWith('en')) return 'en';
-    }
-    return 'zh';
+ // 將預設語言改為英文：只要不是 zh 開頭，就使用 en
+function detectLang(){
+  var list = (navigator.languages && navigator.languages.length
+    ? navigator.languages
+    : [navigator.language || '']).map(function(x){ return String(x || '').toLowerCase(); });
+
+  // 任何 zh（含 zh-TW / zh-HK / zh-CN）都走中文
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].startsWith('zh')) return 'zh';
   }
+  // 其餘一律用英文
+  return 'en';
+}
   var LANG = detectLang();
   var T = I18N[LANG] || I18N['zh'];
   if (!('conflict' in T)) { T.conflict = (LANG==='zh' ? '有重複' : 'Conflicts'); }
